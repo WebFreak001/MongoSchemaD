@@ -35,39 +35,39 @@ enum mongoUnique;
 /// Field must be a SchemaDate/BsonDate. You must update the time using collMod.
 struct mongoExpire
 {
-    this(long seconds)
-    {
-        this.seconds = cast(ulong) seconds;
-    }
-    this(ulong seconds)
-    {
-        this.seconds = seconds;
-    }
-    this(Duration time)
-    {
-        seconds = cast(ulong) time.total!"msecs";
-    }
-    ulong seconds;
+	this(long seconds)
+	{
+		this.seconds = cast(ulong) seconds;
+	}
+	this(ulong seconds)
+	{
+		this.seconds = seconds;
+	}
+	this(Duration time)
+	{
+		seconds = cast(ulong) time.total!"msecs";
+	}
+	ulong seconds;
 }
 
 private template isVariable(alias T)
 {
-    enum isVariable = !is(T) && is(typeof(T)) && !isCallable!T && !is(T == void) && !__traits(isStaticFunction, T) && !__traits(isOverrideFunction, T)
-                && !__traits(isFinalFunction, T) && !__traits(isAbstractFunction, T) && !__traits(isVirtualFunction, T) && !__traits(isVirtualMethod, T)
-                && !is(ReturnType!T);
+	enum isVariable = !is(T) && is(typeof(T)) && !isCallable!T && !is(T == void) && !__traits(isStaticFunction, T) && !__traits(isOverrideFunction, T)
+				&& !__traits(isFinalFunction, T) && !__traits(isAbstractFunction, T) && !__traits(isVirtualFunction, T) && !__traits(isVirtualMethod, T)
+				&& !is(ReturnType!T);
 }
 
 private template isVariable(T)
 {
-    enum isVariable = false; // Types are no variables
+	enum isVariable = false; // Types are no variables
 }
 
 private template getUDAs(alias symbol, alias attribute)
 {
-    import std.typetuple : Filter;
+	import std.typetuple : Filter;
 
-    enum isDesiredUDA(alias S) = is(typeof(S) == attribute);
-    alias getUDAs = Filter!(isDesiredUDA, __traits(getAttributes, symbol));
+	enum isDesiredUDA(alias S) = is(typeof(S) == attribute);
+	alias getUDAs = Filter!(isDesiredUDA, __traits(getAttributes, symbol));
 }
 
 private Bson memberToBson(T)(T member)
@@ -134,16 +134,20 @@ private T bsonToMember(T)(T member, Bson value)
 		}
 		else static if(isArray!(T) && !isSomeString!T)
 		{ // Arrays of anything except strings
+			alias Type = typeof(member[0]);
 			T values;
 			foreach(val; value)
-				values ~= bsonToMember(member, val);
+			{
+				values ~= bsonToMember!Type(Type.init, val);
+			}
 			return values;
 		}
 		else static if(isAssociativeArray!T)
 		{ // Associative Arrays (Objects)
 			T values;
+			alias ValType = ValueType!T;
 			foreach(name, val; value)
-				values[name] = bsonToMember(member, val);
+				values[name] = bsonToMember!ValType(ValType.init, val);
 			return values;
 		}
 		else static if(is(T == Bson))
@@ -163,51 +167,52 @@ Bson toSchemaBson(T)(T obj)
 {
 	Bson data = Bson.emptyObject;
 
-    static if(hasMember!(T, "_schema_object_id_"))
-    {
-        if(obj._schema_object_id_.valid)
-            data["_id"] = obj._schema_object_id_;
-    }
+	static if(hasMember!(T, "_schema_object_id_"))
+	{
+		if(obj._schema_object_id_.valid)
+			data["_id"] = obj._schema_object_id_;
+	}
 
 	foreach(memberName; __traits(allMembers, T))
 	{
 		static if(__traits(compiles, { static s = isVariable!(__traits(getMember, obj, memberName)); }) && isVariable!(__traits(getMember, obj, memberName))
-            && !__traits(compiles, { static s = __traits(getMember, T, memberName); }) // No static members
-            && __traits(compiles, { typeof(__traits(getMember, obj, memberName)) t = __traits(getMember, obj, memberName); }))
+			&& !__traits(compiles, { static s = __traits(getMember, T, memberName); }) // No static members
+			&& __traits(compiles, { typeof(__traits(getMember, obj, memberName)) t = __traits(getMember, obj, memberName); }))
 		{
 			static if(__traits(getProtection, __traits(getMember, obj, memberName)) == "public")
 			{
 				string name = memberName;
 				Bson value;
-				static if(hasUDA!((__traits(getMember, obj, memberName)), schemaIgnore))
-					continue;
-				static if(hasUDA!((__traits(getMember, obj, memberName)), schemaName))
+				static if(!hasUDA!((__traits(getMember, obj, memberName)), schemaIgnore))
 				{
-					static assert(getUDAs!((__traits(getMember, obj, memberName)), schemaName).length == 1, "Member '" ~ memberName ~ "' can only have one name!");
-					name = getUDAs!((__traits(getMember, obj, memberName)), schemaName)[0].name;
-				}
+					static if(hasUDA!((__traits(getMember, obj, memberName)), schemaName))
+					{
+						static assert(getUDAs!((__traits(getMember, obj, memberName)), schemaName).length == 1, "Member '" ~ memberName ~ "' can only have one name!");
+						name = getUDAs!((__traits(getMember, obj, memberName)), schemaName)[0].name;
+					}
 
-				static if(hasUDA!((__traits(getMember, obj, memberName)), encode))
-				{
-					static assert(getUDAs!((__traits(getMember, obj, memberName)), encode).length == 1, "Member '" ~ memberName ~ "' can only have one encoder!");
-					mixin("value = obj." ~ getUDAs!((__traits(getMember, obj, memberName)), encode)[0].func ~ "(obj);");
-				}
-				else static if(hasUDA!((__traits(getMember, obj, memberName)), binaryType))
-				{
-					static assert(isArray!(typeof((__traits(getMember, obj, memberName)))) && typeof((__traits(getMember, obj, memberName))[0]).sizeof == 1, "Binary member '" ~ memberName ~ "' can only be an array of 1 byte values");
-					static assert(getUDAs!((__traits(getMember, obj, memberName)), binaryType).length == 1, "Binary member '" ~ memberName ~ "' can only have one type!");
-					BsonBinData.Type type = getUDAs!((__traits(getMember, obj, memberName)), binaryType)[0].type;
-					value = Bson(BsonBinData(type, cast(immutable(ubyte)[]) (__traits(getMember, obj, memberName))));
-				}
-				else
-				{
-					static if (__traits(compiles, { __traits(hasMember, typeof((__traits(getMember, obj, memberName))), "toBson"); })
-                            && __traits(hasMember, typeof((__traits(getMember, obj, memberName))), "toBson") && !is(ReturnType!(typeof((__traits(getMember, obj, memberName)).toBson)) == Bson))
-						pragma(msg, "Warning: ", typeof((__traits(getMember, obj, memberName))).stringof, ".toBson does not return a vibe.data.bson.Bson struct!");
+					static if(hasUDA!((__traits(getMember, obj, memberName)), encode))
+					{
+						static assert(getUDAs!((__traits(getMember, obj, memberName)), encode).length == 1, "Member '" ~ memberName ~ "' can only have one encoder!");
+						mixin("value = obj." ~ getUDAs!((__traits(getMember, obj, memberName)), encode)[0].func ~ "(obj);");
+					}
+					else static if(hasUDA!((__traits(getMember, obj, memberName)), binaryType))
+					{
+						static assert(isArray!(typeof((__traits(getMember, obj, memberName)))) && typeof((__traits(getMember, obj, memberName))[0]).sizeof == 1, "Binary member '" ~ memberName ~ "' can only be an array of 1 byte values");
+						static assert(getUDAs!((__traits(getMember, obj, memberName)), binaryType).length == 1, "Binary member '" ~ memberName ~ "' can only have one type!");
+						BsonBinData.Type type = getUDAs!((__traits(getMember, obj, memberName)), binaryType)[0].type;
+						value = Bson(BsonBinData(type, cast(immutable(ubyte)[]) (__traits(getMember, obj, memberName))));
+					}
+					else
+					{
+						static if (__traits(compiles, { __traits(hasMember, typeof((__traits(getMember, obj, memberName))), "toBson"); })
+								&& __traits(hasMember, typeof((__traits(getMember, obj, memberName))), "toBson") && !is(ReturnType!(typeof((__traits(getMember, obj, memberName)).toBson)) == Bson))
+							pragma(msg, "Warning: ", typeof((__traits(getMember, obj, memberName))).stringof, ".toBson does not return a vibe.data.bson.Bson struct!");
 
-					value = memberToBson(__traits(getMember, obj, memberName));
+						value = memberToBson(__traits(getMember, obj, memberName));
+					}
+					data[name] = value;
 				}
-				data[name] = value;
 			}
 		}
 	}
@@ -219,49 +224,50 @@ T fromSchemaBson(T)(Bson bson)
 {
 	T obj = T.init;
 
-    static if(hasMember!(T, "_schema_object_id_"))
-    {
-        if(!bson.tryIndex("_id").isNull)
-            obj._schema_object_id_ = bson["_id"].get!BsonObjectID;
-    }
+	static if(hasMember!(T, "_schema_object_id_"))
+	{
+		if(!bson.tryIndex("_id").isNull)
+			obj._schema_object_id_ = bson["_id"].get!BsonObjectID;
+	}
 
 	foreach(memberName; __traits(allMembers, T))
 	{
-        static if(__traits(compiles, { static s = isVariable!(__traits(getMember, obj, memberName)); }) && isVariable!(__traits(getMember, obj, memberName))
-            && !__traits(compiles, { static s = __traits(getMember, T, memberName); }) // No static members
-            && __traits(compiles, { typeof(__traits(getMember, obj, memberName)) t = __traits(getMember, obj, memberName); }))
+		static if(__traits(compiles, { static s = isVariable!(__traits(getMember, obj, memberName)); }) && isVariable!(__traits(getMember, obj, memberName))
+			&& !__traits(compiles, { static s = __traits(getMember, T, memberName); }) // No static members
+			&& __traits(compiles, { typeof(__traits(getMember, obj, memberName)) t = __traits(getMember, obj, memberName); }))
 		{
 			static if(__traits(getProtection, __traits(getMember, obj, memberName)) == "public")
 			{
 				string name = memberName;
-				static if(hasUDA!((__traits(getMember, obj, memberName)), schemaIgnore))
-					continue;
-				static if(hasUDA!((__traits(getMember, obj, memberName)), schemaName))
+				static if(!hasUDA!((__traits(getMember, obj, memberName)), schemaIgnore))
 				{
-					static assert(getUDAs!((__traits(getMember, obj, memberName)), schemaName).length == 1, "Member '" ~ memberName ~ "' can only have one name!");
-					name = getUDAs!((__traits(getMember, obj, memberName)), schemaName)[0].name;
-				}
+					static if(hasUDA!((__traits(getMember, obj, memberName)), schemaName))
+					{
+						static assert(getUDAs!((__traits(getMember, obj, memberName)), schemaName).length == 1, "Member '" ~ memberName ~ "' can only have one name!");
+						name = getUDAs!((__traits(getMember, obj, memberName)), schemaName)[0].name;
+					}
 
-				// compile time code will still be generated but not run at runtime
-				if(bson.tryIndex(name).isNull)
-					continue;
+					// compile time code will still be generated but not run at runtime
+					if(bson.tryIndex(name).isNull)
+						continue;
 
-				static if(hasUDA!((__traits(getMember, obj, memberName)), decode))
-				{
-					static assert(getUDAs!((__traits(getMember, obj, memberName)), decode).length == 1, "Member '" ~ memberName ~ "' can only have one decoder!");
-					mixin("obj." ~ memberName ~ " = obj." ~ getUDAs!((__traits(getMember, obj, memberName)), decode)[0].func ~ "(bson);");
-				}
-				else static if(hasUDA!((__traits(getMember, obj, memberName)), binaryType))
-				{
-					static assert(isArray!(typeof((__traits(getMember, obj, memberName)))) && typeof((__traits(getMember, obj, memberName))[0]).sizeof == 1, "Binary member '" ~ memberName ~ "' can only be an array of 1 byte values");
-					static assert(getUDAs!((__traits(getMember, obj, memberName)), binaryType).length == 1, "Binary member '" ~ memberName ~ "' can only have one type!");
-					assert(bson[name].type == Bson.Type.binData);
-					auto data = bson[name].get!(BsonBinData).rawData;
-					mixin("obj." ~ memberName ~ " = cast(typeof(obj." ~ memberName ~ ")) data;");
-				}
-				else
-				{
-					mixin("obj." ~ memberName ~ " = bsonToMember(__traits(getMember, obj, memberName), bson[name]);");
+					static if(hasUDA!((__traits(getMember, obj, memberName)), decode))
+					{
+						static assert(getUDAs!((__traits(getMember, obj, memberName)), decode).length == 1, "Member '" ~ memberName ~ "' can only have one decoder!");
+						mixin("obj." ~ memberName ~ " = obj." ~ getUDAs!((__traits(getMember, obj, memberName)), decode)[0].func ~ "(bson);");
+					}
+					else static if(hasUDA!((__traits(getMember, obj, memberName)), binaryType))
+					{
+						static assert(isArray!(typeof((__traits(getMember, obj, memberName)))) && typeof((__traits(getMember, obj, memberName))[0]).sizeof == 1, "Binary member '" ~ memberName ~ "' can only be an array of 1 byte values");
+						static assert(getUDAs!((__traits(getMember, obj, memberName)), binaryType).length == 1, "Binary member '" ~ memberName ~ "' can only have one type!");
+						assert(bson[name].type == Bson.Type.binData);
+						auto data = bson[name].get!(BsonBinData).rawData;
+						mixin("obj." ~ memberName ~ " = cast(typeof(obj." ~ memberName ~ ")) data;");
+					}
+					else
+					{
+						mixin("obj." ~ memberName ~ " = bsonToMember(__traits(getMember, obj, memberName), bson[name]);");
+					}
 				}
 			}
 		}
@@ -272,152 +278,153 @@ T fromSchemaBson(T)(Bson bson)
 
 mixin template MongoSchema()
 {
-    static MongoCollection _schema_collection_;
-    private BsonObjectID _schema_object_id_;
+	static MongoCollection _schema_collection_;
+	private BsonObjectID _schema_object_id_;
 
-    @property BsonObjectID bsonID()
-    {
-        return _schema_object_id_;
-    }
+	@property BsonObjectID bsonID()
+	{
+		return _schema_object_id_;
+	}
 
-    /// Inserts or updates an existing value.
-    void save()
-    {
-        if(_schema_object_id_.valid)
-        {
-            _schema_collection_.update(Bson(["_id": Bson(_schema_object_id_)]), this.toSchemaBson(), UpdateFlags.upsert);
-        }
-        else
-        {
-            auto bson = this.toSchemaBson();
-            _schema_collection_.insert(bson);
-            _schema_object_id_ = _schema_collection_.findOne(bson)["_id"].get!BsonObjectID;
-        }
-    }
+	/// Inserts or updates an existing value.
+	void save()
+	{
+		if(_schema_object_id_.valid)
+		{
+			_schema_collection_.update(Bson(["_id": Bson(_schema_object_id_)]), this.toSchemaBson(), UpdateFlags.upsert);
+		}
+		else
+		{
+			auto bson = this.toSchemaBson();
+			_schema_collection_.insert(bson);
+			_schema_object_id_ = _schema_collection_.findOne(bson)["_id"].get!BsonObjectID;
+		}
+	}
 
-    /// Removes this object from the collection. Returns false when _id of this is not set.
-    bool remove()
-    {
-        if(!_schema_object_id_.valid)
-            return false;
-        _schema_collection_.remove(Bson(["_id": Bson(_schema_object_id_)]), DeleteFlags.SingleRemove);
-        return true;
-    }
+	/// Removes this object from the collection. Returns false when _id of this is not set.
+	bool remove()
+	{
+		if(!_schema_object_id_.valid)
+			return false;
+		_schema_collection_.remove(Bson(["_id": Bson(_schema_object_id_)]), DeleteFlags.SingleRemove);
+		return true;
+	}
 
-    /// Finds one element with the object id `id`
-    static typeof(this) findById(BsonObjectID id)
-    {
-        return fromSchemaBson!(typeof(this))(_schema_collection_.findOne(Bson(["_id": Bson(id)])));
-    }
+	/// Finds one element with the object id `id`
+	static typeof(this) findById(BsonObjectID id)
+	{
+		return fromSchemaBson!(typeof(this))(_schema_collection_.findOne(Bson(["_id": Bson(id)])));
+	}
 
-    /// Finds one element with the hex id `id`
-    static typeof(this) findById(string id)
-    {
-        return findById(BsonObjectID.fromString(id));
-    }
+	/// Finds one element with the hex id `id`
+	static typeof(this) findById(string id)
+	{
+		return findById(BsonObjectID.fromString(id));
+	}
 
-    /// Finds one element using a query.
-    static typeof(this) findOne(T)(T query)
-    {
-        return fromSchemaBson!(typeof(this))(_schema_collection_.findOne(query));
-    }
+	/// Finds one element using a query.
+	static typeof(this) findOne(T)(T query)
+	{
+		return fromSchemaBson!(typeof(this))(_schema_collection_.findOne(query));
+	}
 
-    /// Finds one or more elements using a query.
-    static typeof(this)[] find(T)(T query, QueryFlags flags = QueryFlags.None, int num_skip = 0, int num_docs_per_chunk = 0)
-    {
-        typeof(this)[] values;
-        foreach(entry; _schema_collection_.find(query, null, flags, num_skip, num_docs_per_chunk))
-        {
-            values ~= fromSchemaBson!(typeof(this))(entry);
-        }
-        return values;
-    }
+	/// Finds one or more elements using a query.
+	static typeof(this)[] find(T)(T query, QueryFlags flags = QueryFlags.None, int num_skip = 0, int num_docs_per_chunk = 0)
+	{
+		typeof(this)[] values;
+		foreach(entry; _schema_collection_.find(query, null, flags, num_skip, num_docs_per_chunk))
+		{
+			values ~= fromSchemaBson!(typeof(this))(entry);
+		}
+		return values;
+	}
 
-    /// Queries all elements from the collection.
-    static typeof(this)[] find()
-    {
-        typeof(this)[] values;
-        foreach(entry; _schema_collection_.find())
-        {
-            values ~= fromSchemaBson!(typeof(this))(entry);
-        }
-        return values;
-    }
+	/// Queries all elements from the collection.
+	static typeof(this)[] find()
+	{
+		typeof(this)[] values;
+		foreach(entry; _schema_collection_.find())
+		{
+			values ~= fromSchemaBson!(typeof(this))(entry);
+		}
+		return values;
+	}
 
-    /// Updates a document.
-    static void update(T, U)(T query, U update, UpdateFlags options = UpdateFlags.none)
-    {
-        _schema_collection_.update(query, update, options);
-    }
+	/// Updates a document.
+	static void update(T, U)(T query, U update, UpdateFlags options = UpdateFlags.none)
+	{
+		_schema_collection_.update(query, update, options);
+	}
 
-    /// Updates a document or inserts it when not existent. Shorthand for `update(..., UpdateFlags.upsert)`
-    static void upsert(T, U)(T query, U update, UpdateFlags options = UpdateFlags.upsert)
-    {
-        _schema_collection_.update(query, update, options);
-    }
+	/// Updates a document or inserts it when not existent. Shorthand for `update(..., UpdateFlags.upsert)`
+	static void upsert(T, U)(T query, U update, UpdateFlags options = UpdateFlags.upsert)
+	{
+		_schema_collection_.update(query, update, options);
+	}
 }
 
 void register(T)(MongoCollection collection)
 {
-    T obj = T.init;
+	T obj = T.init;
 
-    static if(hasMember!(T, "_schema_collection_"))
-    {
-        assert(T._schema_collection_.name.length == 0, "Can't register a Schema to 2 collections!");
-        T._schema_collection_ = collection;
-    }
+	static if(hasMember!(T, "_schema_collection_"))
+	{
+		assert(T._schema_collection_.name.length == 0, "Can't register a Schema to 2 collections!");
+		T._schema_collection_ = collection;
+	}
 
-    foreach(memberName; __traits(allMembers, T))
-    {
-        static if(__traits(compiles, { static s = isVariable!(__traits(getMember, obj, memberName)); }) && isVariable!(__traits(getMember, obj, memberName)))
-        {
-            static if(__traits(getProtection, __traits(getMember, obj, memberName)) == "public")
-            {
-                string name = memberName;
-                static if(hasUDA!((__traits(getMember, obj, memberName)), schemaIgnore))
-                    continue;
-                static if(hasUDA!((__traits(getMember, obj, memberName)), schemaName))
-                {
-                    static assert(getUDAs!((__traits(getMember, obj, memberName)), schemaName).length == 1, "Member '" ~ memberName ~ "' can only have one name!");
-                    name = getUDAs!((__traits(getMember, obj, memberName)), schemaName)[0].name;
-                }
+	foreach(memberName; __traits(allMembers, T))
+	{
+		static if(__traits(compiles, { static s = isVariable!(__traits(getMember, obj, memberName)); }) && isVariable!(__traits(getMember, obj, memberName)))
+		{
+			static if(__traits(getProtection, __traits(getMember, obj, memberName)) == "public")
+			{
+				string name = memberName;
+				static if(!hasUDA!((__traits(getMember, obj, memberName)), schemaIgnore))
+				{
+					static if(hasUDA!((__traits(getMember, obj, memberName)), schemaName))
+					{
+						static assert(getUDAs!((__traits(getMember, obj, memberName)), schemaName).length == 1, "Member '" ~ memberName ~ "' can only have one name!");
+						name = getUDAs!((__traits(getMember, obj, memberName)), schemaName)[0].name;
+					}
 
-                IndexFlags flags = IndexFlags.None;
-                ulong expires = 0LU;
-                bool force;
+					IndexFlags flags = IndexFlags.None;
+					ulong expires = 0LU;
+					bool force;
 
-                static if(hasUDA!((__traits(getMember, obj, memberName)), mongoForceIndex))
-                {
-                    force = true;
-                }
-                static if(hasUDA!((__traits(getMember, obj, memberName)), mongoBackground))
-                {
-                    flags |= IndexFlags.Background;
-                }
-                static if(hasUDA!((__traits(getMember, obj, memberName)), mongoDropDuplicates))
-                {
-                    flags |= IndexFlags.DropDuplicates;
-                }
-                static if(hasUDA!((__traits(getMember, obj, memberName)), mongoSparse))
-                {
-                    flags |= IndexFlags.Sparse;
-                }
-                static if(hasUDA!((__traits(getMember, obj, memberName)), mongoUnique))
-                {
-                    flags |= IndexFlags.Unique;
-                }
-                static if(hasUDA!((__traits(getMember, obj, memberName)), mongoExpire))
-                {
-                    static assert(getUDAs!((__traits(getMember, obj, memberName)), mongoExpire).length == 1, "Member '" ~ memberName ~ "' can only have one expiry value!");
-                    flags |= IndexFlags.ExpireAfterSeconds;
-                    expires = getUDAs!((__traits(getMember, obj, memberName)), mongoExpire)[0].seconds;
-                }
+					static if(hasUDA!((__traits(getMember, obj, memberName)), mongoForceIndex))
+					{
+						force = true;
+					}
+					static if(hasUDA!((__traits(getMember, obj, memberName)), mongoBackground))
+					{
+						flags |= IndexFlags.Background;
+					}
+					static if(hasUDA!((__traits(getMember, obj, memberName)), mongoDropDuplicates))
+					{
+						flags |= IndexFlags.DropDuplicates;
+					}
+					static if(hasUDA!((__traits(getMember, obj, memberName)), mongoSparse))
+					{
+						flags |= IndexFlags.Sparse;
+					}
+					static if(hasUDA!((__traits(getMember, obj, memberName)), mongoUnique))
+					{
+						flags |= IndexFlags.Unique;
+					}
+					static if(hasUDA!((__traits(getMember, obj, memberName)), mongoExpire))
+					{
+						static assert(getUDAs!((__traits(getMember, obj, memberName)), mongoExpire).length == 1, "Member '" ~ memberName ~ "' can only have one expiry value!");
+						flags |= IndexFlags.ExpireAfterSeconds;
+						expires = getUDAs!((__traits(getMember, obj, memberName)), mongoExpire)[0].seconds;
+					}
 
-                if(flags != IndexFlags.None && !force)
-                    collection.ensureIndex([tuple(name, 1)], flags, dur!"seconds"(expires));
-            }
-        }
-    }
+					if(flags != IndexFlags.None && !force)
+						collection.ensureIndex([tuple(name, 1)], flags, dur!"seconds"(expires));
+				}
+			}
+		}
+	}
 }
 
 /// Class serializing to a bson date containing a special `now` value that gets translated to the current time when converting to bson.
@@ -528,88 +535,148 @@ unittest
 	assert(user2.password != user.password);
 	assert(user2.salt == user.salt);
 	// dates are gonna differ as `user2` has the current time now and `user` a magic value to get the current time
-    assert(user2.dateCreated != user.dateCreated);
+	assert(user2.dateCreated != user.dateCreated);
 	assert(user2.activity == user.activity);
 }
 
 unittest
 {
-    import vibe.db.mongo.mongo;
-    import std.digest.sha;
-    import std.exception;
+	import vibe.db.mongo.mongo;
+	import std.digest.sha;
+	import std.exception;
 
-    auto client = connectMongoDB("localhost");
-    auto database = client.getDatabase("test");
-    MongoCollection users = database["users"];
-    users.remove(); // Clears collection
-    users.dropIndex("*"); // Remove all indexes
+	auto client = connectMongoDB("localhost");
+	auto database = client.getDatabase("test");
+	MongoCollection users = database["users"];
+	users.remove(); // Clears collection
 
-    struct User
-    {
-        mixin MongoSchema;
+	struct User
+	{
+		mixin MongoSchema;
 
-        @mongoUnique
-        string username;
-        @binaryType()
-        ubyte[] hash;
-        @schemaName("profile-picture")
-        string profilePicture;
-        auto registered = SchemaDate.now;
-    }
+		@mongoUnique
+		string username;
+		@binaryType()
+		ubyte[] hash;
+		@schemaName("profile-picture")
+		string profilePicture;
+		auto registered = SchemaDate.now;
+	}
 
-    users.register!User;
+	users.register!User;
 
-    assert(User.find().length == 0);
+	assert(User.find().length == 0);
 
-    User user;
-    user.username = "Example";
-    user.hash = sha512Of("password123");
-    user.profilePicture = "example-avatar.png";
+	User user;
+	user.username = "Example";
+	user.hash = sha512Of("password123");
+	user.profilePicture = "example-avatar.png";
 
-    assertNotThrown(user.save());
+	assertNotThrown(user.save());
 
-    User user2;
-    user2.username = "Bob";
-    user2.hash = sha512Of("foobar");
-    user2.profilePicture = "bob-avatar.png";
+	User user2;
+	user2.username = "Bob";
+	user2.hash = sha512Of("foobar");
+	user2.profilePicture = "bob-avatar.png";
 
-    assertNotThrown(user2.save());
+	assertNotThrown(user2.save());
 
-    User faker;
-    faker.username = "Example";
-    faker.hash = sha512Of("PASSWORD");
-    faker.profilePicture = "example-avatar.png";
+	User faker;
+	faker.username = "Example";
+	faker.hash = sha512Of("PASSWORD");
+	faker.profilePicture = "example-avatar.png";
 
-    assertThrown(faker.save());
-    // Unique username
+	assertThrown(faker.save());
+	// Unique username
 
-    faker.username = "Example_";
-    assertNotThrown(faker.save());
+	faker.username = "Example_";
+	assertNotThrown(faker.save());
 
-    user.username = "NewExample";
-    user.save();
+	user.username = "NewExample";
+	user.save();
 
-    auto actualFakeID = faker.bsonID;
-    faker = User.findOne(["username": "NewExample"]);
+	auto actualFakeID = faker.bsonID;
+	faker = User.findOne(["username": "NewExample"]);
 
-    assert(actualFakeID != faker.bsonID);
+	assert(actualFakeID != faker.bsonID);
 
-    foreach(usr; User.find)
-    {
-        usr.profilePicture = "default.png"; // Reset all profile pictures
-        usr.save();
-    }
-    user = User.findOne(["username": "NewExample"]);
-    user2 = User.findOne(["username": "Bob"]);
-    faker = User.findOne(["username": "Example_"]);
-    assert(user.profilePicture == user2.profilePicture && user2.profilePicture == faker.profilePicture && faker.profilePicture == "default.png");
+	foreach(usr; User.find)
+	{
+		usr.profilePicture = "default.png"; // Reset all profile pictures
+		usr.save();
+	}
+	user = User.findOne(["username": "NewExample"]);
+	user2 = User.findOne(["username": "Bob"]);
+	faker = User.findOne(["username": "Example_"]);
+	assert(user.profilePicture == user2.profilePicture && user2.profilePicture == faker.profilePicture && faker.profilePicture == "default.png");
 
-    User user3;
-    user3.username = "User123";
-    user3.hash = sha512Of("486951");
-    user3.profilePicture = "new.png";
-    User.upsert(["username": "User123"], user3.toSchemaBson);
-    user3 = User.findOne(["username": "User123"]);
-    assert(user3.hash == sha512Of("486951"));
-    assert(user3.profilePicture == "new.png");
+	User user3;
+	user3.username = "User123";
+	user3.hash = sha512Of("486951");
+	user3.profilePicture = "new.png";
+	User.upsert(["username": "User123"], user3.toSchemaBson);
+	user3 = User.findOne(["username": "User123"]);
+	assert(user3.hash == sha512Of("486951"));
+	assert(user3.profilePicture == "new.png");
+}
+
+unittest
+{
+	import vibe.db.mongo.mongo;
+	import mongoschema.aliases : name, ignore, unique, binary;
+	import std.digest.sha;
+	import std.digest.md;
+
+	auto client = connectMongoDB("localhost");
+
+	struct Permission
+	{
+		string name;
+		int priority;
+	}
+
+	struct User
+	{
+		mixin MongoSchema;
+
+		@unique
+		string username;
+
+		@binary()
+		ubyte[] hash;
+		@binary()
+		ubyte[] salt;
+
+		@name("profile-picture")
+		string profilePicture = "default.png";
+
+		Permission[] permissions;
+
+		@ignore:
+		int sessionID;
+	}
+
+	auto coll = client.getCollection("test.users2");
+	coll.remove();
+	coll.register!User;
+
+	User register(string name, string password)
+	{
+		User user;
+		user.username = name;
+		user.salt = md5Of(name).dup;
+		user.hash = sha512Of(cast(ubyte[]) password ~ user.salt).dup;
+		user.permissions ~= Permission("forum.access", 1);
+		user.save();
+		return user;
+	}
+
+	User find(string name)
+	{
+		return User.findOne(["username": name]);
+	}
+
+	User a = register("foo", "bar");
+	User b = find("foo");
+	assert(a == b);
 }
