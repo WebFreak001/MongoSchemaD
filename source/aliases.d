@@ -18,6 +18,8 @@ alias dropDuplicates = mongoDropDuplicates;
 ///
 alias expireAfterSeconds = mongoExpire;
 ///
+alias expires = mongoExpire;
+///
 alias sparse = mongoSparse;
 ///
 alias unique = mongoUnique;
