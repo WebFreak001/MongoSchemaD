@@ -12,13 +12,13 @@ import core.time;
 /// Will ignore the variables and not encode/decode them.
 enum schemaIgnore;
 /// Custom encode function. `func` is the name of the function which must be present as child.
-struct encode { string func; }
+struct encode { /++ Function name (needs to be member function) +/ string func; }
 /// Custom decode function. `func` is the name of the function which must be present as child.
-struct decode { string func; }
+struct decode { /++ Function name (needs to be member function) +/ string func; }
 /// Encodes the value as binary value. Must be an array with one byte wide elements.
-struct binaryType { BsonBinData.Type type = BsonBinData.Type.generic; }
+struct binaryType { /++ Type to encode +/ BsonBinData.Type type = BsonBinData.Type.generic; }
 /// Custom name for special characters.
-struct schemaName { string name; }
+struct schemaName { /++ Custom replacement name +/ string name; }
 
 // Mongo Attributes
 /// Will create an index with (by default) no flags.
@@ -35,18 +35,22 @@ enum mongoUnique;
 /// Field must be a SchemaDate/BsonDate. You must update the time using collMod.
 struct mongoExpire
 {
+	///
 	this(long seconds)
 	{
 		this.seconds = cast(ulong) seconds;
 	}
+	///
 	this(ulong seconds)
 	{
 		this.seconds = seconds;
 	}
+	///
 	this(Duration time)
 	{
 		seconds = cast(ulong) time.total!"msecs";
 	}
+	///
 	ulong seconds;
 }
 
@@ -162,7 +166,7 @@ private T bsonToMember(T)(T member, Bson value)
 	}
 }
 
-/// Generated function for generating
+/// Generates a Bson document from a struct/class object
 Bson toSchemaBson(T)(T obj)
 {
 	Bson data = Bson.emptyObject;
@@ -220,6 +224,7 @@ Bson toSchemaBson(T)(T obj)
 	return data;
 }
 
+/// Generates a struct/class object from a Bson node
 T fromSchemaBson(T)(Bson bson)
 {
 	T obj = T.init;
@@ -276,11 +281,13 @@ T fromSchemaBson(T)(Bson bson)
 	return obj;
 }
 
+/// Mixin for functions for interacting with Mongo collections.
 mixin template MongoSchema()
 {
 	static MongoCollection _schema_collection_;
 	private BsonObjectID _schema_object_id_;
 
+	/// Returns: the _id value (if set by save or find)
 	@property BsonObjectID bsonID()
 	{
 		return _schema_object_id_;
@@ -363,6 +370,7 @@ mixin template MongoSchema()
 	}
 }
 
+/// Binds a MongoCollection to a Schema. Can only be done once!
 void register(T)(MongoCollection collection)
 {
 	T obj = T.init;
@@ -431,18 +439,22 @@ void register(T)(MongoCollection collection)
 final struct SchemaDate
 {
 public:
+	///
 	this(BsonDate date)
 	{
 		_time = date.value;
 	}
 
+	///
 	this(long time)
 	{
 		_time = time;
 	}
 
+	///
 	@property auto time() { return _time; }
 
+	///
 	static Bson toBson(SchemaDate date)
 	{
 		if(date._time == -1)
@@ -455,11 +467,13 @@ public:
 		}
 	}
 
+	///
 	static SchemaDate fromBson(Bson bson)
 	{
 		return SchemaDate(bson.get!BsonDate.value);
 	}
 
+	/// Magic value setting the date to the current time stamp when serializing.
 	static SchemaDate now() { return SchemaDate(-1); }
 
 private:
