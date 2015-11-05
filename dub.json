@@ -1,0 +1,10 @@
+{
+	"name": "mongoschemad",
+	"description": "MongoDB Schema support",
+	"copyright": "Copyright © 2015, webfreak",
+	"authors": ["webfreak"],
+	"dependencies":
+	{
+		"vibe-d": "~>0.7.19"
+	}
+}
