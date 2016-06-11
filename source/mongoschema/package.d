@@ -174,8 +174,8 @@ Bson toSchemaBson(T)(T obj)
 
 	static if(hasMember!(T, "_schema_object_id_"))
 	{
-		if(obj._schema_object_id_.valid)
-			data["_id"] = obj._schema_object_id_;
+		if(obj.bsonID.valid)
+			data["_id"] = obj.bsonID;
 	}
 
 	foreach(memberName; __traits(allMembers, T))
@@ -235,7 +235,7 @@ T fromSchemaBson(T)(Bson bson)
 	static if(hasMember!(T, "_schema_object_id_"))
 	{
 		if(!bson.tryIndex("_id").isNull)
-			obj._schema_object_id_ = bson["_id"].get!BsonObjectID;
+			obj.bsonID = bson["_id"].get!BsonObjectID;
 	}
 
 	foreach(memberName; __traits(allMembers, T))
@@ -293,7 +293,7 @@ mixin template MongoSchema()
 	private BsonObjectID _schema_object_id_;
 
 	/// Returns: the _id value (if set by save or find)
-	@property BsonObjectID bsonID()
+	@property ref BsonObjectID bsonID()
 	{
 		return _schema_object_id_;
 	}
