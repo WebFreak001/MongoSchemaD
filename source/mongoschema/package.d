@@ -179,7 +179,9 @@ Bson toSchemaBson(T)(T obj)
 
 	foreach(memberName; __traits(allMembers, T))
 	{
-		static if(__traits(compiles, { static s = isVariable!(__traits(getMember, obj, memberName)); }) && isVariable!(__traits(getMember, obj, memberName))
+		static if(memberName == "_schema_object_id_")
+			continue;
+		else static if(__traits(compiles, { static s = isVariable!(__traits(getMember, obj, memberName)); }) && isVariable!(__traits(getMember, obj, memberName))
 			&& !__traits(compiles, { static s = __traits(getMember, T, memberName); }) // No static members
 			&& __traits(compiles, { typeof(__traits(getMember, obj, memberName)) t = __traits(getMember, obj, memberName); }))
 		{
@@ -237,7 +239,9 @@ T fromSchemaBson(T)(Bson bson)
 
 	foreach(memberName; __traits(allMembers, T))
 	{
-		static if(__traits(compiles, { static s = isVariable!(__traits(getMember, obj, memberName)); }) && isVariable!(__traits(getMember, obj, memberName))
+		static if(memberName == "_schema_object_id_")
+			continue;
+		else static if(__traits(compiles, { static s = isVariable!(__traits(getMember, obj, memberName)); }) && isVariable!(__traits(getMember, obj, memberName))
 			&& !__traits(compiles, { static s = __traits(getMember, T, memberName); }) // No static members
 			&& __traits(compiles, { typeof(__traits(getMember, obj, memberName)) t = __traits(getMember, obj, memberName); }))
 		{
