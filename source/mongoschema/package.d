@@ -6,6 +6,7 @@ import vibe.db.mongo.connection;
 import std.datetime;
 import std.traits;
 import core.time;
+import std.typecons : tuple;
 
 // Bson Attributes
 
