@@ -92,6 +92,16 @@ private Bson memberToBson(T)(T member)
 		// Custom defined toBson
 		return T.toBson(member);
 	}
+	else static if (is(T == Json))
+	{
+		return Bson.fromJson(member);
+	}
+	else static if (is(T == BsonBinData) || is(T == BsonObjectID)
+			|| is(T == BsonDate) || is(T == BsonTimestamp)
+			|| is(T == BsonRegex) || is(T == typeof(null)))
+	{
+		return Bson(member);
+	}
 	else static if (!isBasicType!T && !isArray!T && !is(T == enum)
 			&& !is(T == Bson) && !isAssociativeArray!T)
 	{
@@ -122,21 +132,33 @@ private Bson memberToBson(T)(T member)
 		{ // Already a Bson object
 			return member;
 		}
-		else
+		else static if (__traits(compiles, { Bson(member); }))
 		{ // Check if this can be passed
-			static assert(__traits(compiles, { Bson(member); }),
-					"Type '" ~ T.stringof ~ "' is incompatible with Bson schemas");
 			return Bson(member);
+		}
+		else
+		{
+			pragma(msg, "Warning falling back to serializeToBson for type " ~ T.stringof);
+			return serializeToBson(member);
 		}
 	}
 }
 
-private T bsonToMember(T)(T member, Bson value)
+private T bsonToMember(T)(auto ref T member, Bson value)
 {
 	static if (__traits(hasMember, T, "fromBson") && is(ReturnType!(typeof(T.fromBson)) == T))
 	{
 		// Custom defined toBson
 		return T.fromBson(value);
+	}
+	else static if (is(T == Json))
+	{
+		return Bson.fromJson(value);
+	}
+	else static if (is(T == BsonBinData) || is(T == BsonObjectID)
+			|| is(T == BsonDate) || is(T == BsonTimestamp) || is(T == BsonRegex))
+	{
+		return value.get!T;
 	}
 	else static if (!isBasicType!T && !isArray!T && !is(T == enum)
 			&& !is(T == Bson) && !isAssociativeArray!T)
@@ -150,7 +172,7 @@ private T bsonToMember(T)(T member, Bson value)
 		{ // Enum value
 			return cast(T) value.get!(OriginalType!T);
 		}
-		else static if (isArray!(T) && !isSomeString!T)
+		else static if (isArray!T && !isSomeString!T)
 		{ // Arrays of anything except strings
 			alias Type = typeof(member[0]);
 			T values;
@@ -170,13 +192,16 @@ private T bsonToMember(T)(T member, Bson value)
 		}
 		else static if (is(T == Bson))
 		{ // Already a Bson object
-			return member;
+			return value;
+		}
+		else static if (__traits(compiles, { value.get!T(); }))
+		{ // Check if this can be passed
+			return value.get!T();
 		}
 		else
-		{ // Check if this can be passed
-			static assert(__traits(compiles, { value.get!T(); }),
-					"Type '" ~ T.stringof ~ "' incompatible with Bson schemas");
-			return value.get!T();
+		{
+			pragma(msg, "Warning falling back to deserializeBson for type " ~ T.stringof);
+			return deserializeBson(value);
 		}
 	}
 }
@@ -184,6 +209,11 @@ private T bsonToMember(T)(T member, Bson value)
 /// Generates a Bson document from a struct/class object
 Bson toSchemaBson(T)(T obj)
 {
+	static if (__traits(compiles, cast(T) null))
+	{
+		return Bson(null);
+	}
+
 	Bson data = Bson.emptyObject;
 
 	static if (hasMember!(T, "_schema_object_id_"))
@@ -264,6 +294,11 @@ Bson toSchemaBson(T)(T obj)
 /// Generates a struct/class object from a Bson node
 T fromSchemaBson(T)(Bson bson)
 {
+	static if (__traits(compiles, cast(T) null))
+	{
+		if (bson.isNull)
+			return null;
+	}
 	T obj = T.init;
 
 	static if (hasMember!(T, "_schema_object_id_"))
@@ -323,9 +358,7 @@ T fromSchemaBson(T)(Bson bson)
 					}
 					else
 					{
-						mixin(
-								"obj." ~ memberName
-								~ " = bsonToMember(__traits(getMember, obj, memberName), bson[name]);");
+						mixin("obj." ~ memberName ~ " = bsonToMember(obj." ~ memberName ~ ", bson[name]);");
 					}
 				}
 			}
