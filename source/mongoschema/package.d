@@ -209,9 +209,12 @@ private T bsonToMember(T)(auto ref T member, Bson value)
 /// Generates a Bson document from a struct/class object
 Bson toSchemaBson(T)(T obj)
 {
-	static if (__traits(compiles, cast(T) null))
+	static if (__traits(compiles, cast(T) null) && __traits(compiles, {
+			T foo = null;
+		}))
 	{
-		return Bson(null);
+		if (obj is null)
+			return Bson(null);
 	}
 
 	Bson data = Bson.emptyObject;
@@ -294,7 +297,9 @@ Bson toSchemaBson(T)(T obj)
 /// Generates a struct/class object from a Bson node
 T fromSchemaBson(T)(Bson bson)
 {
-	static if (__traits(compiles, cast(T) null))
+	static if (__traits(compiles, cast(T) null) && __traits(compiles, {
+			T foo = null;
+		}))
 	{
 		if (bson.isNull)
 			return null;
@@ -358,7 +363,9 @@ T fromSchemaBson(T)(Bson bson)
 					}
 					else
 					{
-						mixin("obj." ~ memberName ~ " = bsonToMember(obj." ~ memberName ~ ", bson[name]);");
+						mixin(
+								"obj." ~ memberName ~ " = bsonToMember(obj."
+								~ memberName ~ ", bson[name]);");
 					}
 				}
 			}
