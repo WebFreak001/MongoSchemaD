@@ -523,7 +523,7 @@ void register(T)(MongoCollection collection)
 							.seconds;
 					}
 
-					if (flags != IndexFlags.None && !force)
+					if (flags != IndexFlags.None || force)
 						collection.ensureIndex([tuple(name, 1)], flags, dur!"seconds"(expires));
 				}
 			}
