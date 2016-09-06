@@ -201,7 +201,7 @@ private T bsonToMember(T)(auto ref T member, Bson value)
 		else
 		{
 			pragma(msg, "Warning falling back to deserializeBson for type " ~ T.stringof);
-			return deserializeBson(value);
+			return deserializeBson!T(value);
 		}
 	}
 }
