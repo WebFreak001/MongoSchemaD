@@ -397,9 +397,9 @@ mixin template MongoSchema()
 		}
 		else
 		{
+			_schema_object_id_ = BsonObjectID.generate;
 			auto bson = this.toSchemaBson();
 			_schema_collection_.insert(bson);
-			_schema_object_id_ = _schema_collection_.findOne(bson)["_id"].get!BsonObjectID;
 		}
 	}
 
