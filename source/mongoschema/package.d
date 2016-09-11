@@ -375,6 +375,135 @@ T fromSchemaBson(T)(Bson bson)
 	return obj;
 }
 
+struct DocumentRange(Schema)
+{
+	private MongoCursor!(Bson, Bson, typeof(null)) _cursor;
+
+	package this(MongoCursor!(Bson, Bson, typeof(null)) cursor)
+	{
+		_cursor = cursor;
+	}
+
+	/**
+		Returns true if there are no more documents for this cursor.
+
+		Throws: An exception if there is a query or communication error.
+	*/
+	@property bool empty()
+	{
+		return _cursor.empty;
+	}
+
+	/**
+		Returns the current document of the response.
+
+		Use empty and popFront to iterate over the list of documents using an
+		input range interface. Note that calling this function is only allowed
+		if empty returns false.
+	*/
+	@property Schema front()
+	{
+		return fromSchemaBson!Schema(_cursor.front);
+	}
+
+	/**
+		Controls the order in which the query returns matching documents.
+
+		This method must be called before starting to iterate, or an exeption
+		will be thrown. If multiple calls to $(D sort()) are issued, only
+		the last one will have an effect.
+
+		Params:
+			order = A BSON object convertible value that defines the sort order
+				of the result. This BSON object must be structured according to
+				the MongoDB documentation (see below).
+
+		Returns: Reference to the modified original curser instance.
+
+		Throws:
+			An exception if there is a query or communication error.
+			Also throws if the method was called after beginning of iteration.
+
+		See_Also: $(LINK http://docs.mongodb.org/manual/reference/method/cursor.sort)
+	*/
+	auto sort(T)(T order)
+	{
+		_cursor.sort(serializeToBson(order));
+		return this;
+	}
+
+	/**
+		Limits the number of documents that the cursor returns.
+
+		This method must be called before beginnig iteration in order to have
+		effect. If multiple calls to limit() are made, the one with the lowest
+		limit will be chosen.
+
+		Params:
+			count = The maximum number number of documents to return. A value
+				of zero means unlimited.
+
+		Returns: the same cursor
+
+		See_Also: $(LINK http://docs.mongodb.org/manual/reference/method/cursor.limit)
+	*/
+	auto limit(size_t count)
+	{
+		_cursor.limit(count);
+		return this;
+	}
+
+	/**
+		Skips a given number of elements at the beginning of the cursor.
+
+		This method must be called before beginnig iteration in order to have
+		effect. If multiple calls to skip() are made, the one with the maximum
+		number will be chosen.
+
+		Params:
+			count = The number of documents to skip.
+
+		Returns: the same cursor
+
+		See_Also: $(LINK http://docs.mongodb.org/manual/reference/method/cursor.skip)
+	*/
+	auto skip(int count)
+	{
+		_cursor.skip(count);
+		return this;
+	}
+
+	/**
+		Advances the cursor to the next document of the response.
+
+		Note that calling this function is only allowed if empty returns false.
+	*/
+	void popFront()
+	{
+		_cursor.popFront();
+	}
+
+	/**
+		Iterates over all remaining documents.
+
+		Note that iteration is one-way - elements that have already been visited
+		will not be visited again if another iteration is done.
+
+		Throws: An exception if there is a query or communication error.
+	*/
+	int opApply(int delegate(Schema doc) del)
+	{
+		while (!_cursor.empty)
+		{
+			auto doc = _cursor.front;
+			_cursor.popFront();
+			if (auto ret = del(fromSchemaBson!Schema(doc)))
+				return ret;
+		}
+		return 0;
+	}
+}
+
 class DocumentNotFoundException : Exception
 {
 	this(string msg, string file = __FILE__, size_t line = __LINE__) pure nothrow @nogc @safe
@@ -481,7 +610,7 @@ mixin template MongoSchema()
 	}
 
 	/// Queries all elements from the collection.
-	static typeof(this)[] find()
+	deprecated("use findAll instead") static typeof(this)[] find()
 	{
 		typeof(this)[] values;
 		foreach (entry; _schema_collection_.find())
@@ -489,6 +618,20 @@ mixin template MongoSchema()
 			values ~= fromSchemaBson!(typeof(this))(entry);
 		}
 		return values;
+	}
+
+	/// Finds one or more elements using a query as range.
+	static DocumentRange!(typeof(this)) findRange(T)(T query,
+			QueryFlags flags = QueryFlags.None, int num_skip = 0, int num_docs_per_chunk = 0)
+	{
+		return DocumentRange!(typeof(this))(_schema_collection_.find(query,
+				null, flags, num_skip, num_docs_per_chunk));
+	}
+
+	/// Queries all elements from the collection as range.
+	static DocumentRange!(typeof(this)) findAll()
+	{
+		return DocumentRange!(typeof(this))(_schema_collection_.find());
 	}
 
 	/// Updates a document.
@@ -706,6 +849,7 @@ unittest
 	import vibe.db.mongo.mongo;
 	import std.digest.sha;
 	import std.exception;
+	import std.array;
 
 	auto client = connectMongoDB("localhost");
 	auto database = client.getDatabase("test");
@@ -726,7 +870,7 @@ unittest
 
 	users.register!User;
 
-	assert(User.find().length == 0);
+	assert(User.findAll().array.length == 0);
 
 	User user;
 	user.username = "Example";
@@ -761,7 +905,7 @@ unittest
 
 	assert(actualFakeID != faker.bsonID);
 
-	foreach (usr; User.find)
+	foreach (usr; User.findAll)
 	{
 		usr.profilePicture = "default.png"; // Reset all profile pictures
 		usr.save();
