@@ -6,7 +6,7 @@ import vibe.db.mongo.connection;
 import std.datetime;
 import std.traits;
 import core.time;
-import std.typecons : tuple;
+import std.typecons : tuple, Nullable;
 
 // Bson Attributes
 
@@ -375,6 +375,14 @@ T fromSchemaBson(T)(Bson bson)
 	return obj;
 }
 
+class DocumentNotFoundException : Exception
+{
+	this(string msg, string file = __FILE__, size_t line = __LINE__) pure nothrow @nogc @safe
+	{
+		super(msg, file, line);
+	}
+}
+
 /// Mixin for functions for interacting with Mongo collections.
 mixin template MongoSchema()
 {
@@ -413,10 +421,18 @@ mixin template MongoSchema()
 		return true;
 	}
 
+	static auto findOneOrThrow(T)(T query)
+	{
+		Bson found = _schema_collection_.findOne(query);
+		if (found.isNull)
+			throw new DocumentNotFoundException("Could not find one " ~ typeof(this).stringof);
+		return found;
+	}
+
 	/// Finds one element with the object id `id`
 	static typeof(this) findById(BsonObjectID id)
 	{
-		return fromSchemaBson!(typeof(this))(_schema_collection_.findOne(Bson(["_id" : Bson(id)])));
+		return fromSchemaBson!(typeof(this))(findOneOrThrow(Bson(["_id" : Bson(id)])));
 	}
 
 	/// Finds one element with the hex id `id`
@@ -428,7 +444,28 @@ mixin template MongoSchema()
 	/// Finds one element using a query.
 	static typeof(this) findOne(T)(T query)
 	{
-		return fromSchemaBson!(typeof(this))(_schema_collection_.findOne(query));
+		return fromSchemaBson!(typeof(this))(findOneOrThrow(query));
+	}
+
+	static Nullable!(typeof(this)) tryFindById(BsonObjectID id)
+	{
+		Bson found = _schema_collection_.findOne(Bson(["_id" : Bson(id)]));
+		if (found.isNull)
+			return Nullable!(typeof(this)).init;
+		return Nullable!(typeof(this))(fromSchemaBson!(typeof(this))(found));
+	}
+
+	static Nullable!(typeof(this)) tryFindById(string id)
+	{
+		return tryFindById(BsonObjectID.fromString(id));
+	}
+
+	static Nullable!(typeof(this)) tryFindOne(T)(T query)
+	{
+		Bson found = _schema_collection_.findOne(query);
+		if (found.isNull)
+			return Nullable!(typeof(this)).init;
+		return Nullable!(typeof(this))(fromSchemaBson!(typeof(this))(found));
 	}
 
 	/// Finds one or more elements using a query.
