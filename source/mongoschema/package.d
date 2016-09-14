@@ -6,7 +6,7 @@ import vibe.db.mongo.connection;
 import std.datetime;
 import std.traits;
 import core.time;
-import std.typecons : tuple, Nullable;
+import std.typecons : tuple;
 
 // Bson Attributes
 
@@ -379,7 +379,7 @@ struct DocumentRange(Schema)
 {
 	private MongoCursor!(Bson, Bson, typeof(null)) _cursor;
 
-	package this(MongoCursor!(Bson, Bson, typeof(null)) cursor)
+	public this(MongoCursor!(Bson, Bson, typeof(null)) cursor)
 	{
 		_cursor = cursor;
 	}
@@ -515,6 +515,8 @@ class DocumentNotFoundException : Exception
 /// Mixin for functions for interacting with Mongo collections.
 mixin template MongoSchema()
 {
+	import std.typecons : Nullable;
+
 	static MongoCollection _schema_collection_;
 	private BsonObjectID _schema_object_id_;
 
@@ -624,7 +626,7 @@ mixin template MongoSchema()
 	static DocumentRange!(typeof(this)) findRange(T)(T query,
 			QueryFlags flags = QueryFlags.None, int num_skip = 0, int num_docs_per_chunk = 0)
 	{
-		return DocumentRange!(typeof(this))(_schema_collection_.find(query,
+		return DocumentRange!(typeof(this))(_schema_collection_.find(serializeToBson(query),
 				null, flags, num_skip, num_docs_per_chunk));
 	}
 
