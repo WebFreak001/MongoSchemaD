@@ -59,7 +59,7 @@ User register(string name, string password)
 	// ->
 	// {
 	//   username: name,
-	//   ash: <binary>,
+	//   hash: <binary>,
 	//   salt: <binary>,
 	//   profile-picture: "default.png",
 	//   permissions: [{
@@ -72,6 +72,6 @@ User register(string name, string password)
 
 User find(string name)
 {
-	return User.findOne(["username": name]);
+	return User.findOneOrThrow(["username": name]);
 }
 ```
