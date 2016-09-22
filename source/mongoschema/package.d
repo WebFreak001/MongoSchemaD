@@ -648,6 +648,21 @@ mixin template MongoSchema()
 	{
 		_schema_collection_.update(query, update, options);
 	}
+
+	static void remove(T)(T selector, DeleteFlags flags = DeleteFlags.none)
+	{
+		_schema_collection_.remove(selector, flags);
+	}
+
+	static void removeAll()
+	{
+		_schema_collection_.remove();
+	}
+
+	static void dropTable()
+	{
+		_schema_collection_.drop();
+	}
 }
 
 /// Binds a MongoCollection to a Schema. Can only be done once!
