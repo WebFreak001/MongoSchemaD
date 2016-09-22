@@ -7,6 +7,7 @@ import std.datetime;
 import std.traits;
 import core.time;
 import std.typecons : tuple;
+import std.datetime : SysTime;
 
 // Bson Attributes
 
@@ -765,6 +766,16 @@ public:
 	static SchemaDate now()
 	{
 		return SchemaDate(-1);
+	}
+
+	SysTime toSysTime()
+	{
+		return BsonDate(_time).toSysTime();
+	}
+
+	BsonDate toBsonDate()
+	{
+		return BsonDate(_time);
 	}
 
 private:
