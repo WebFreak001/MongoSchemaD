@@ -376,6 +376,7 @@ T fromSchemaBson(T)(Bson bson)
 	return obj;
 }
 
+/// Range for iterating over a collection using a Schema.
 struct DocumentRange(Schema)
 {
 	private MongoCursor!(Bson, Bson, typeof(null)) _cursor;
@@ -505,14 +506,17 @@ struct DocumentRange(Schema)
 	}
 }
 
+/// Exception thrown if a document could not be found.
 class DocumentNotFoundException : Exception
 {
+	///
 	this(string msg, string file = __FILE__, size_t line = __LINE__) pure nothrow @nogc @safe
 	{
 		super(msg, file, line);
 	}
 }
 
+///
 struct PipelineUnwindOperation
 {
 	/// Field path to an array field. To specify a field path, prefix the field name with a dollar sign $.
@@ -521,6 +525,7 @@ struct PipelineUnwindOperation
 	string includeArrayIndex = null;
 }
 
+///
 struct SchemaPipeline
 {
 	this(MongoCollection collection)
@@ -533,7 +538,7 @@ struct SchemaPipeline
 	auto project(Bson specifications)
 	{
 		assert(!finalized);
-		pipeline ~= Bson(["$project": specifications]);
+		pipeline ~= Bson(["$project" : specifications]);
 		return this;
 	}
 
@@ -542,7 +547,7 @@ struct SchemaPipeline
 	auto match(Bson query)
 	{
 		assert(!finalized);
-		pipeline ~= Bson(["$match": query]);
+		pipeline ~= Bson(["$match" : query]);
 		return this;
 	}
 
@@ -551,7 +556,7 @@ struct SchemaPipeline
 	auto redact(Bson expression)
 	{
 		assert(!finalized);
-		pipeline ~= Bson(["$redact": expression]);
+		pipeline ~= Bson(["$redact" : expression]);
 		return this;
 	}
 
@@ -560,7 +565,7 @@ struct SchemaPipeline
 	auto limit(size_t count)
 	{
 		assert(!finalized);
-		pipeline ~= Bson(["$limit": Bson(count)]);
+		pipeline ~= Bson(["$limit" : Bson(count)]);
 		return this;
 	}
 
@@ -569,7 +574,7 @@ struct SchemaPipeline
 	auto skip(size_t count)
 	{
 		assert(!finalized);
-		pipeline ~= Bson(["$skip": Bson(count)]);
+		pipeline ~= Bson(["$skip" : Bson(count)]);
 		return this;
 	}
 
@@ -578,7 +583,7 @@ struct SchemaPipeline
 	auto unwind(string path)
 	{
 		assert(!finalized);
-		pipeline ~= Bson(["$unwind": Bson(path)]);
+		pipeline ~= Bson(["$unwind" : Bson(path)]);
 		return this;
 	}
 
@@ -587,10 +592,10 @@ struct SchemaPipeline
 	auto unwind(PipelineUnwindOperation op)
 	{
 		assert(!finalized);
-		Bson opb = Bson(["path": Bson(op.path)]);
+		Bson opb = Bson(["path" : Bson(op.path)]);
 		if (op.includeArrayIndex !is null)
 			opb["includeArrayIndex"] = Bson(op.includeArrayIndex);
-		pipeline ~= Bson(["$unwind": opb]);
+		pipeline ~= Bson(["$unwind" : opb]);
 		return this;
 	}
 
@@ -599,10 +604,11 @@ struct SchemaPipeline
 	auto unwind(PipelineUnwindOperation op, bool preserveNullAndEmptyArrays)
 	{
 		assert(!finalized);
-		Bson opb = Bson(["path": Bson(op.path), "preserveNullAndEmptyArrays": Bson(preserveNullAndEmptyArrays)]);
+		Bson opb = Bson(["path" : Bson(op.path), "preserveNullAndEmptyArrays"
+				: Bson(preserveNullAndEmptyArrays)]);
 		if (op.includeArrayIndex !is null)
 			opb["includeArrayIndex"] = Bson(op.includeArrayIndex);
-		pipeline ~= Bson(["$unwind": opb]);
+		pipeline ~= Bson(["$unwind" : opb]);
 		return this;
 	}
 
@@ -612,7 +618,7 @@ struct SchemaPipeline
 	{
 		assert(!finalized);
 		accumulators["_id"] = id;
-		pipeline ~= Bson(["$group": Bson(accumulators)]);
+		pipeline ~= Bson(["$group" : Bson(accumulators)]);
 		return this;
 	}
 
@@ -621,7 +627,7 @@ struct SchemaPipeline
 	{
 		assert(!finalized);
 		accumulators["_id"] = Bson(null);
-		pipeline ~= Bson(["$group": Bson(accumulators)]);
+		pipeline ~= Bson(["$group" : Bson(accumulators)]);
 		return this;
 	}
 
@@ -631,7 +637,7 @@ struct SchemaPipeline
 	auto sample(size_t count)
 	{
 		assert(!finalized);
-		pipeline ~= Bson(["$sample": Bson(count)]);
+		pipeline ~= Bson(["$sample" : Bson(count)]);
 		return this;
 	}
 
@@ -640,7 +646,7 @@ struct SchemaPipeline
 	auto sort(Bson sorter)
 	{
 		assert(!finalized);
-		pipeline ~= Bson(["$sort": sorter]);
+		pipeline ~= Bson(["$sort" : sorter]);
 		return this;
 	}
 
@@ -649,7 +655,7 @@ struct SchemaPipeline
 	auto geoNear(Bson options)
 	{
 		assert(!finalized);
-		pipeline ~= Bson(["$geoNear": options]);
+		pipeline ~= Bson(["$geoNear" : options]);
 		return this;
 	}
 
@@ -659,7 +665,7 @@ struct SchemaPipeline
 	auto lookup(Bson options)
 	{
 		assert(!finalized);
-		pipeline ~= Bson(["$lookup": options]);
+		pipeline ~= Bson(["$lookup" : options]);
 		return this;
 	}
 
@@ -669,7 +675,7 @@ struct SchemaPipeline
 	{
 		assert(!finalized);
 		debug finalized = true;
-		pipeline ~= Bson(["$out": Bson(outputCollection)]);
+		pipeline ~= Bson(["$out" : Bson(outputCollection)]);
 		return this;
 	}
 
@@ -678,7 +684,7 @@ struct SchemaPipeline
 	auto indexStats()
 	{
 		assert(!finalized);
-		pipeline ~= Bson(["$indexStats": Bson.emptyObject]);
+		pipeline ~= Bson(["$indexStats" : Bson.emptyObject]);
 		return this;
 	}
 
@@ -734,6 +740,8 @@ mixin template MongoSchema()
 		return true;
 	}
 
+	/// Tries to find one document in the collection.
+	/// Throws: DocumentNotFoundException if not found
 	static auto findOneOrThrow(T)(T query)
 	{
 		Bson found = _schema_collection_.findOne(query);
@@ -742,24 +750,28 @@ mixin template MongoSchema()
 		return found;
 	}
 
-	/// Finds one element with the object id `id`
+	/// Finds one element with the object id `id`.
+	/// Throws: DocumentNotFoundException if not found
 	static typeof(this) findById(BsonObjectID id)
 	{
 		return fromSchemaBson!(typeof(this))(findOneOrThrow(Bson(["_id" : Bson(id)])));
 	}
 
-	/// Finds one element with the hex id `id`
+	/// Finds one element with the hex id `id`.
+	/// Throws: DocumentNotFoundException if not found
 	static typeof(this) findById(string id)
 	{
 		return findById(BsonObjectID.fromString(id));
 	}
 
 	/// Finds one element using a query.
+	/// Throws: DocumentNotFoundException if not found
 	static typeof(this) findOne(T)(T query)
 	{
 		return fromSchemaBson!(typeof(this))(findOneOrThrow(query));
 	}
 
+	/// Tries to find a document by the _id field and returns a Nullable which `isNull` if it could not be found. Otherwise it will be the document wrapped in the nullable.
 	static Nullable!(typeof(this)) tryFindById(BsonObjectID id)
 	{
 		Bson found = _schema_collection_.findOne(Bson(["_id" : Bson(id)]));
@@ -768,11 +780,13 @@ mixin template MongoSchema()
 		return Nullable!(typeof(this))(fromSchemaBson!(typeof(this))(found));
 	}
 
+	/// ditto
 	static Nullable!(typeof(this)) tryFindById(string id)
 	{
 		return tryFindById(BsonObjectID.fromString(id));
 	}
 
+	/// Tries to find a document in this collection. It will return a Nullable which `isNull` if the document could not be found. Otherwise it will be the document wrapped in the nullable.
 	static Nullable!(typeof(this)) tryFindOne(T)(T query)
 	{
 		Bson found = _schema_collection_.findOne(query);
@@ -830,31 +844,51 @@ mixin template MongoSchema()
 		_schema_collection_.update(query, update, options);
 	}
 
+	/// Deletes one or any amount of documents matching the selector based on the flags.
 	static void remove(T)(T selector, DeleteFlags flags = DeleteFlags.none)
 	{
 		_schema_collection_.remove(selector, flags);
 	}
 
+	/// Removes all documents from this collection.
 	static void removeAll()
 	{
 		_schema_collection_.remove();
 	}
 
+	/// Drops the entire collection and all indices in the database.
 	static void dropTable()
 	{
 		_schema_collection_.drop();
 	}
 
+	/// Returns the count of documents in this collection matching this query.
 	static auto count(T)(T query)
 	{
 		return _schema_collection_.count(query);
 	}
 
+	/// Returns the count of documents in this collection.
 	static auto countAll()
 	{
 		return _schema_collection_.count(Bson.emptyObject);
 	}
 
+	/// Start of an aggregation call. Returns a pipeline with typesafe functions for modifying the pipeline and running it at the end.
+	/// Examples:
+	/// --------------------
+	/// auto groupResults = Book.aggregate.groupAll([
+	/// 	"totalPrice": Bson([
+	/// 		"$sum": Bson([
+	/// 			"$multiply": Bson([Bson("$price"), Bson("$quantity")])
+	/// 		])
+	/// 	]),
+	/// 	"averageQuantity": Bson([
+	/// 		"$avg": Bson("$quantity")
+	/// 	]),
+	/// 	"count": Bson(["$sum": Bson(1)])
+	/// ]).run;
+	/// --------------------
 	static SchemaPipeline aggregate()
 	{
 		return SchemaPipeline(_schema_collection_);
@@ -979,11 +1013,15 @@ public:
 		return SchemaDate(-1);
 	}
 
+	/// Converts this SchemaDate to a std.datetime.SysTime object.
 	SysTime toSysTime()
 	{
+		if (_time == -1)
+			return Clock.currTime;
 		return BsonDate(_time).toSysTime();
 	}
 
+	/// Converts this SchemaDate to a vibed BsonDate object.
 	BsonDate toBsonDate()
 	{
 		return BsonDate(_time);
