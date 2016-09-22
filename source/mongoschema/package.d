@@ -663,6 +663,16 @@ mixin template MongoSchema()
 	{
 		_schema_collection_.drop();
 	}
+
+	static auto count(T)(T query)
+	{
+		return _schema_collection_.count(query);
+	}
+
+	static auto countAll()
+	{
+		return _schema_collection_.count(Bson.emptyObject);
+	}
 }
 
 /// Binds a MongoCollection to a Schema. Can only be done once!
