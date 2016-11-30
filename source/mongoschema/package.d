@@ -340,7 +340,7 @@ T fromSchemaBson(T)(Bson bson)
 					}
 
 					// compile time code will still be generated but not run at runtime
-					if (bson.tryIndex(name).isNull)
+					if (bson.tryIndex(name).isNull || bson[name].type == Bson.Type.undefined)
 						continue;
 
 					static if (hasUDA!((__traits(getMember, obj, memberName)), decode))
