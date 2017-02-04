@@ -1007,6 +1007,11 @@ public:
 		return SchemaDate(bson.get!BsonDate.value);
 	}
 
+  ///
+  static SchemaDate fromSysTime(SysTime stime) {
+    return SchemaDate(BsonDate(stime).value);
+  }
+
 	/// Magic value setting the date to the current time stamp when serializing.
 	static SchemaDate now()
 	{
