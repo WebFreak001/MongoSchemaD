@@ -528,6 +528,7 @@ struct PipelineUnwindOperation
 ///
 struct SchemaPipeline
 {
+@safe:
 	this(MongoCollection collection)
 	{
 		_collection = collection;
@@ -709,13 +710,13 @@ mixin template MongoSchema()
 	private BsonObjectID _schema_object_id_;
 
 	/// Returns: the _id value (if set by save or find)
-	@property ref BsonObjectID bsonID()
+	@property ref BsonObjectID bsonID() @safe
 	{
 		return _schema_object_id_;
 	}
 
 	/// Inserts or updates an existing value.
-	void save()
+	void save() @safe
 	{
 		if (_schema_object_id_.valid)
 		{
@@ -731,7 +732,7 @@ mixin template MongoSchema()
 	}
 
 	/// Removes this object from the collection. Returns false when _id of this is not set.
-	bool remove()
+	bool remove() @safe const
 	{
 		if (!_schema_object_id_.valid)
 			return false;
@@ -871,6 +872,8 @@ mixin template MongoSchema()
 	/// Returns the count of documents in this collection.
 	static auto countAll()
 	{
+		import vibe.data.bson : Bson;
+
 		return _schema_collection_.count(Bson.emptyObject);
 	}
 
@@ -896,7 +899,7 @@ mixin template MongoSchema()
 }
 
 /// Binds a MongoCollection to a Schema. Can only be done once!
-void register(T)(MongoCollection collection)
+void register(T)(MongoCollection collection) @safe
 {
 	T obj = T.init;
 
@@ -969,7 +972,7 @@ void register(T)(MongoCollection collection)
 /// Class serializing to a bson date containing a special `now` value that gets translated to the current time when converting to bson.
 final struct SchemaDate
 {
-public:
+public @safe:
 	///
 	this(BsonDate date)
 	{
@@ -983,7 +986,7 @@ public:
 	}
 
 	///
-	@property auto time()
+	@property auto time() const
 	{
 		return _time;
 	}
@@ -1020,7 +1023,7 @@ public:
 	}
 
 	/// Converts this SchemaDate to a std.datetime.SysTime object.
-	SysTime toSysTime()
+	SysTime toSysTime() const
 	{
 		if (_time == -1)
 			return Clock.currTime;
@@ -1028,7 +1031,7 @@ public:
 	}
 
 	/// Converts this SchemaDate to a vibed BsonDate object.
-	BsonDate toBsonDate()
+	BsonDate toBsonDate() const
 	{
 		return BsonDate(_time);
 	}
