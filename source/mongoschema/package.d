@@ -6,7 +6,7 @@ import vibe.db.mongo.connection;
 import std.datetime;
 import std.traits;
 import core.time;
-import std.typecons : tuple, BitFlags;
+import std.typecons : tuple, BitFlags, isTuple, Tuple;
 import std.datetime : SysTime;
 
 // Bson Attributes
@@ -111,7 +111,7 @@ private Bson memberToBson(T)(T member)
 	{ // std.typecons.BitFlags
 		return Bson(cast(OriginalType!Enum) member);
 	}
-	else static if (isArray!(T) && !isSomeString!T)
+	else static if (isArray!(T) && !isSomeString!T || isTuple!T)
 	{ // Arrays of anything except strings
 		Bson[] values;
 		foreach (val; member)
@@ -168,6 +168,16 @@ private T bsonToMember(T)(auto ref T member, Bson value)
 	else static if (is(T == BitFlags!(Enum, Unsafe), Enum, alias Unsafe))
 	{ // std.typecons.BitFlags
 		return cast(T) cast(Enum) value.get!(OriginalType!Enum);
+	}
+	else static if (isTuple!T)
+	{ // Tuples
+		auto bsons = value.get!(Bson[]);
+		T values;
+		foreach (i, val; values)
+		{
+			values[i] = bsonToMember!(typeof(val))(values[i], bsons[i]);
+		}
+		return values;
 	}
 	else static if (isArray!T && !isSomeString!T)
 	{ // Arrays of anything except strings
@@ -1096,6 +1106,7 @@ unittest
 		SchemaDate dateCreated = SchemaDate.now;
 		Activity activity = Activity.Medium;
 		BitFlags!Permission permissions;
+		Tuple!(string, string) name;
 
 		Bson encodePassword(UserSchema user)
 		{
@@ -1108,6 +1119,7 @@ unittest
 	user.password = "12345";
 	user.username = "Bob";
 	user.permissions = Permission.A | Permission.C;
+	user.name = tuple("Bob", "Bobby");
 	auto bson = user.toSchemaBson();
 	assert(bson["username"].get!string == "Bob");
 	assert(bson["date-created"].get!(BsonDate).value > 0);
@@ -1115,6 +1127,7 @@ unittest
 	assert(bson["salt"].get!(BsonBinData).rawData == cast(ubyte[]) "foobar");
 	assert(bson["password"].get!(BsonBinData).rawData == sha1Of(user.password ~ user.salt));
 	assert(bson["permissions"].get!(int) == 5);
+	assert(bson["name"].get!(Bson[]).length == 2);
 
 	auto user2 = bson.fromSchemaBson!UserSchema();
 	assert(user2.username == user.username);
@@ -1124,6 +1137,7 @@ unittest
 	assert(user2.dateCreated != user.dateCreated);
 	assert(user2.activity == user.activity);
 	assert(user2.permissions == user.permissions);
+	assert(user2.name == user.name);
 }
 
 unittest
