@@ -6,7 +6,7 @@ import vibe.db.mongo.connection;
 import std.datetime;
 import std.traits;
 import core.time;
-import std.typecons : tuple;
+import std.typecons : tuple, BitFlags;
 import std.datetime : SysTime;
 
 // Bson Attributes
@@ -103,45 +103,45 @@ private Bson memberToBson(T)(T member)
 	{
 		return Bson(member);
 	}
-	else static if (!isBasicType!T && !isArray!T && !is(T == enum)
-			&& !is(T == Bson) && !isAssociativeArray!T)
+	else static if (is(T == enum))
+	{ // Enum value
+		return Bson(cast(OriginalType!T) member);
+	}
+	else static if (is(T == BitFlags!(Enum, Unsafe), Enum, alias Unsafe))
+	{ // std.typecons.BitFlags
+		return Bson(cast(OriginalType!Enum) member);
+	}
+	else static if (isArray!(T) && !isSomeString!T)
+	{ // Arrays of anything except strings
+		Bson[] values;
+		foreach (val; member)
+			values ~= memberToBson(val);
+		return Bson(values);
+	}
+	else static if (isAssociativeArray!T)
+	{ // Associative Arrays (Objects)
+		Bson[string] values;
+		foreach (name, val; member)
+			values[name] = memberToBson(val);
+		return Bson(values);
+	}
+	else static if (is(T == Bson))
+	{ // Already a Bson object
+		return member;
+	}
+	else static if (__traits(compiles, { Bson(member); }))
+	{ // Check if this can be passed
+		return Bson(member);
+	}
+	else static if (!isBasicType!T)
 	{
 		// Mixed in MongoSchema
 		return member.toSchemaBson();
 	}
 	else // Generic value
 	{
-		static if (is(T == enum))
-		{ // Enum value
-			return Bson(cast(OriginalType!T) member);
-		}
-		else static if (isArray!(T) && !isSomeString!T)
-		{ // Arrays of anything except strings
-			Bson[] values;
-			foreach (val; member)
-				values ~= memberToBson(val);
-			return Bson(values);
-		}
-		else static if (isAssociativeArray!T)
-		{ // Associative Arrays (Objects)
-			Bson[string] values;
-			foreach (name, val; member)
-				values[name] = memberToBson(val);
-			return Bson(values);
-		}
-		else static if (is(T == Bson))
-		{ // Already a Bson object
-			return member;
-		}
-		else static if (__traits(compiles, { Bson(member); }))
-		{ // Check if this can be passed
-			return Bson(member);
-		}
-		else
-		{
-			pragma(msg, "Warning falling back to serializeToBson for type " ~ T.stringof);
-			return serializeToBson(member);
-		}
+		pragma(msg, "Warning falling back to serializeToBson for type " ~ T.stringof);
+		return serializeToBson(member);
 	}
 }
 
@@ -161,49 +161,49 @@ private T bsonToMember(T)(auto ref T member, Bson value)
 	{
 		return value.get!T;
 	}
-	else static if (!isBasicType!T && !isArray!T && !is(T == enum)
-			&& !is(T == Bson) && !isAssociativeArray!T)
+	else static if (is(T == enum))
+	{ // Enum value
+		return cast(T) value.get!(OriginalType!T);
+	}
+	else static if (is(T == BitFlags!(Enum, Unsafe), Enum, alias Unsafe))
+	{ // std.typecons.BitFlags
+		return cast(T) cast(Enum) value.get!(OriginalType!Enum);
+	}
+	else static if (isArray!T && !isSomeString!T)
+	{ // Arrays of anything except strings
+		alias Type = typeof(member[0]);
+		T values;
+		foreach (val; value)
+		{
+			values ~= bsonToMember!Type(Type.init, val);
+		}
+		return values;
+	}
+	else static if (isAssociativeArray!T)
+	{ // Associative Arrays (Objects)
+		T values;
+		alias ValType = ValueType!T;
+		foreach (name, val; value)
+			values[name] = bsonToMember!ValType(ValType.init, val);
+		return values;
+	}
+	else static if (is(T == Bson))
+	{ // Already a Bson object
+		return value;
+	}
+	else static if (__traits(compiles, { value.get!T(); }))
+	{ // Check if this can be passed
+		return value.get!T();
+	}
+	else static if (!isBasicType!T)
 	{
 		// Mixed in MongoSchema
 		return value.fromSchemaBson!T();
 	}
 	else // Generic value
 	{
-		static if (is(T == enum))
-		{ // Enum value
-			return cast(T) value.get!(OriginalType!T);
-		}
-		else static if (isArray!T && !isSomeString!T)
-		{ // Arrays of anything except strings
-			alias Type = typeof(member[0]);
-			T values;
-			foreach (val; value)
-			{
-				values ~= bsonToMember!Type(Type.init, val);
-			}
-			return values;
-		}
-		else static if (isAssociativeArray!T)
-		{ // Associative Arrays (Objects)
-			T values;
-			alias ValType = ValueType!T;
-			foreach (name, val; value)
-				values[name] = bsonToMember!ValType(ValType.init, val);
-			return values;
-		}
-		else static if (is(T == Bson))
-		{ // Already a Bson object
-			return value;
-		}
-		else static if (__traits(compiles, { value.get!T(); }))
-		{ // Check if this can be passed
-			return value.get!T();
-		}
-		else
-		{
-			pragma(msg, "Warning falling back to deserializeBson for type " ~ T.stringof);
-			return deserializeBson!T(value);
-		}
+		pragma(msg, "Warning falling back to deserializeBson for type " ~ T.stringof);
+		return deserializeBson!T(value);
 	}
 }
 
@@ -716,7 +716,7 @@ mixin template MongoSchema()
 	}
 
 	/// Inserts or updates an existing value.
-	void save() @safe
+	void save()
 	{
 		if (_schema_object_id_.valid)
 		{
@@ -1077,6 +1077,13 @@ unittest
 		Low
 	}
 
+	enum Permission
+	{
+		A = 1,
+		B = 2,
+		C = 4
+	}
+
 	struct UserSchema
 	{
 		string username = "Unnamed";
@@ -1088,6 +1095,7 @@ unittest
 		@schemaName("date-created")
 		SchemaDate dateCreated = SchemaDate.now;
 		Activity activity = Activity.Medium;
+		BitFlags!Permission permissions;
 
 		Bson encodePassword(UserSchema user)
 		{
@@ -1099,12 +1107,14 @@ unittest
 	auto user = UserSchema();
 	user.password = "12345";
 	user.username = "Bob";
+	user.permissions = Permission.A | Permission.C;
 	auto bson = user.toSchemaBson();
 	assert(bson["username"].get!string == "Bob");
 	assert(bson["date-created"].get!(BsonDate).value > 0);
 	assert(bson["activity"].get!(int) == cast(int) Activity.Medium);
 	assert(bson["salt"].get!(BsonBinData).rawData == cast(ubyte[]) "foobar");
 	assert(bson["password"].get!(BsonBinData).rawData == sha1Of(user.password ~ user.salt));
+	assert(bson["permissions"].get!(int) == 5);
 
 	auto user2 = bson.fromSchemaBson!UserSchema();
 	assert(user2.username == user.username);
@@ -1113,6 +1123,7 @@ unittest
 	// dates are gonna differ as `user2` has the current time now and `user` a magic value to get the current time
 	assert(user2.dateCreated != user.dateCreated);
 	assert(user2.activity == user.activity);
+	assert(user2.permissions == user.permissions);
 }
 
 unittest
