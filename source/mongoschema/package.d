@@ -1046,6 +1046,17 @@ public @safe:
 		return BsonDate(_time);
 	}
 
+	///
+	string toISOExtString() const
+	{
+		return toSysTime.toISOExtString;
+	}
+
+	static SchemaDate fromISOExtString(S)(in S s) if (isSomeString!S)
+	{
+		return SchemaDate.fromSysTime(SysTime.fromISOExtString());
+	}
+
 private:
 	long _time;
 }
