@@ -1052,14 +1052,17 @@ public @safe:
 		return toSysTime.toISOExtString;
 	}
 
+	///
 	static SchemaDate fromISOExtString(S)(in S s) if (isSomeString!S)
 	{
-		return SchemaDate.fromSysTime(SysTime.fromISOExtString());
+		return SchemaDate.fromSysTime(SysTime.fromISOExtString(s));
 	}
 
 private:
 	long _time;
 }
+
+static assert (isISOExtStringSerializable!SchemaDate);
 
 unittest
 {
