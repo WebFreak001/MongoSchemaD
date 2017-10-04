@@ -121,7 +121,8 @@ private Bson memberToBson(T)(T member)
 	else static if (isAssociativeArray!T)
 	{ // Associative Arrays (Objects)
 		Bson[string] values;
-		foreach (name, val; member)
+		static assert(is(KeyType!T == string), "Associative arrays must have strings as keys");
+		foreach (string name, val; member)
 			values[name] = memberToBson(val);
 		return Bson(values);
 	}
@@ -192,8 +193,9 @@ private T bsonToMember(T)(auto ref T member, Bson value)
 	else static if (isAssociativeArray!T)
 	{ // Associative Arrays (Objects)
 		T values;
+		static assert(is(KeyType!T == string), "Associative arrays must have strings as keys");
 		alias ValType = ValueType!T;
-		foreach (name, val; value)
+		foreach (string name, val; value)
 			values[name] = bsonToMember!ValType(ValType.init, val);
 		return values;
 	}
