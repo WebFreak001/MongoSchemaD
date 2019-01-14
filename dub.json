@@ -6,6 +6,7 @@
 	"license": "MIT",
 	"dependencies":
 	{
-		"vibe-d": "*"
+		"vibe-d:mongodb": "*",
+		"vibe-d:data": "*"
 	}
 }
