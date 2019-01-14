@@ -202,6 +202,11 @@ T bsonToMember(T)(auto ref T member, Bson value)
 	}
 	else static if (__traits(compiles, { value.get!T(); }))
 	{ // Check if this can be passed
+		static if (is(T == long))
+		{ // If the output expects a long, but the data is a int, do .get!int
+			if (value.type == Bson.Type.int_)
+				return value.get!int();
+		}
 		return value.get!T();
 	}
 	else static if (!isBasicType!T)
