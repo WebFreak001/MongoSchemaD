@@ -783,7 +783,7 @@ mixin template MongoSchema()
 
 	/// Tries to find one document in the collection.
 	/// Throws: DocumentNotFoundException if not found
-	static auto findOneOrThrow(T)(T query)
+	static Bson findOneOrThrow(T)(T query)
 	{
 		Bson found = collection.findOne(query);
 		if (found.isNull)
@@ -834,6 +834,30 @@ mixin template MongoSchema()
 		if (found.isNull)
 			return Nullable!(typeof(this)).init;
 		return Nullable!(typeof(this))(fromSchemaBson!(typeof(this))(found));
+	}
+
+	/// Tries to find a document by the _id field and returns a default value if it could not be found.
+	static Nullable!(typeof(this)) tryFindById(BsonObjectID id, typeof(this) defaultValue)
+	{
+		Bson found = collection.findOne(Bson(["_id" : Bson(id)]));
+		if (found.isNull)
+			return defaultValue;
+		return fromSchemaBson!(typeof(this))(found);
+	}
+
+	/// ditto
+	static Nullable!(typeof(this)) tryFindById(string id, typeof(this) defaultValue)
+	{
+		return tryFindById(BsonObjectID.fromString(id), defaultValue);
+	}
+
+	/// Tries to find a document in this collection. It will return a default value if the document could not be found.
+	static Nullable!(typeof(this)) tryFindOne(T)(T query, typeof(this) defaultValue)
+	{
+		Bson found = collection.findOne(query);
+		if (found.isNull)
+			return defaultValue;
+		return fromSchemaBson!(typeof(this))(found);
 	}
 
 	/// Finds one or more elements using a query.
