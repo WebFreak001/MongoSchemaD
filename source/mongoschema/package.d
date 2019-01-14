@@ -707,6 +707,12 @@ struct SchemaPipeline
 		return _collection.aggregate(pipeline);
 	}
 
+	DocumentRange!T collect(T = Bson)(AggregateOptions options = AggregateOptions.init)
+	{
+		debug finalized = true;
+		return _collection.aggregate!T(pipeline, options);
+	}
+
 private:
 	bool finalized = false;
 	Bson[] pipeline;
