@@ -9,6 +9,7 @@ public import vibe.db.mongo.connection;
 
 public import mongoschema.date;
 public import mongoschema.db;
+public import mongoschema.query;
 public import mongoschema.variant;
 
 // Bson Attributes
@@ -80,7 +81,8 @@ package template isVariable(T)
 	enum isVariable = false; // Types are no variables
 }
 
-package Bson memberToBson(T)(T member)
+/// Converts any value to a bson value
+Bson memberToBson(T)(T member)
 {
 	static if (__traits(hasMember, T, "toBson") && is(ReturnType!(typeof(T.toBson)) == Bson))
 	{
@@ -140,7 +142,8 @@ package Bson memberToBson(T)(T member)
 	}
 }
 
-package T bsonToMember(T)(auto ref T member, Bson value)
+/// Converts any bson value to a given type
+T bsonToMember(T)(auto ref T member, Bson value)
 {
 	static if (__traits(hasMember, T, "fromBson") && is(ReturnType!(typeof(T.fromBson)) == T))
 	{

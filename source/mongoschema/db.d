@@ -403,6 +403,12 @@ mixin template MongoSchema()
 
 	/// Tries to find one document in the collection.
 	/// Throws: DocumentNotFoundException if not found
+	static Bson findOneOrThrow(Query!(typeof(this)) query)
+	{
+		return findOneOrThrow(query._query);
+	}
+
+	/// ditto
 	static Bson findOneOrThrow(T)(T query)
 	{
 		Bson found = collection.findOne(query);
@@ -427,6 +433,12 @@ mixin template MongoSchema()
 
 	/// Finds one element using a query.
 	/// Throws: DocumentNotFoundException if not found
+	static typeof(this) findOne(Query!(typeof(this)) query)
+	{
+		return fromSchemaBson!(typeof(this))(findOneOrThrow(query));
+	}
+
+	/// ditto
 	static typeof(this) findOne(T)(T query)
 	{
 		return fromSchemaBson!(typeof(this))(findOneOrThrow(query));
@@ -448,6 +460,12 @@ mixin template MongoSchema()
 	}
 
 	/// Tries to find a document in this collection. It will return a Nullable which `isNull` if the document could not be found. Otherwise it will be the document wrapped in the nullable.
+	static Nullable!(typeof(this)) tryFindOne(Query!(typeof(this)) query)
+	{
+		return tryFindOne(query._query);
+	}
+
+	/// ditto
 	static Nullable!(typeof(this)) tryFindOne(T)(T query)
 	{
 		Bson found = collection.findOne(query);
@@ -472,6 +490,12 @@ mixin template MongoSchema()
 	}
 
 	/// Tries to find a document in this collection. It will return a default value if the document could not be found.
+	static typeof(this) tryFindOne(Query!(typeof(this)) query, typeof(this) defaultValue)
+	{
+		return tryFindOne(query._query, defaultValue);
+	}
+
+	/// ditto
 	static typeof(this) tryFindOne(T)(T query, typeof(this) defaultValue)
 	{
 		Bson found = collection.findOne(query);
@@ -481,6 +505,13 @@ mixin template MongoSchema()
 	}
 
 	/// Finds one or more elements using a query.
+	static typeof(this)[] find(Query!(typeof(this)) query, QueryFlags flags = QueryFlags.None,
+			int num_skip = 0, int num_docs_per_chunk = 0)
+	{
+		return find(query._query, flags, num_skip, num_docs_per_chunk);
+	}
+
+	/// ditto
 	static typeof(this)[] find(T)(T query, QueryFlags flags = QueryFlags.None,
 			int num_skip = 0, int num_docs_per_chunk = 0)
 	{
@@ -492,18 +523,14 @@ mixin template MongoSchema()
 		return values;
 	}
 
-	/// Queries all elements from the collection.
-	deprecated("use findAll instead") static typeof(this)[] find()
+	/// Finds one or more elements using a query as range.
+	static DocumentRange!(typeof(this)) findRange(Query!(typeof(this)) query,
+			QueryFlags flags = QueryFlags.None, int num_skip = 0, int num_docs_per_chunk = 0)
 	{
-		typeof(this)[] values;
-		foreach (entry; collection.find())
-		{
-			values ~= fromSchemaBson!(typeof(this))(entry);
-		}
-		return values;
+		return findRange(query._query, flags, num_skip, num_docs_per_chunk);
 	}
 
-	/// Finds one or more elements using a query as range.
+	/// ditto
 	static DocumentRange!(typeof(this)) findRange(T)(T query,
 			QueryFlags flags = QueryFlags.None, int num_skip = 0, int num_docs_per_chunk = 0)
 	{
@@ -533,18 +560,36 @@ mixin template MongoSchema()
 	}
 
 	/// Updates a document.
+	static void update(U)(Query!(typeof(this)) query, U update, UpdateFlags options = UpdateFlags.none)
+	{
+		update(query._query, update, options);
+	}
+
+	/// ditto
 	static void update(T, U)(T query, U update, UpdateFlags options = UpdateFlags.none)
 	{
 		collection.update(query, update, options);
 	}
 
 	/// Updates a document or inserts it when not existent. Shorthand for `update(..., UpdateFlags.upsert)`
+	static void upsert(U)(Query!(typeof(this)) query, U upsert, UpdateFlags options = UpdateFlags.upsert)
+	{
+		upsert(query._query, upsert, options);
+	}
+
+	/// ditto
 	static void upsert(T, U)(T query, U update, UpdateFlags options = UpdateFlags.upsert)
 	{
 		collection.update(query, update, options);
 	}
 
 	/// Deletes one or any amount of documents matching the selector based on the flags.
+	static void remove(Query!(typeof(this)) query, DeleteFlags flags = DeleteFlags.none)
+	{
+		remove(query._query, flags);
+	}
+
+	/// ditto
 	static void remove(T)(T selector, DeleteFlags flags = DeleteFlags.none)
 	{
 		collection.remove(selector, flags);
@@ -563,6 +608,12 @@ mixin template MongoSchema()
 	}
 
 	/// Returns the count of documents in this collection matching this query.
+	static auto count(Query!(typeof(this)) query)
+	{
+		return count(query._query);
+	}
+
+	/// ditto
 	static auto count(T)(T query)
 	{
 		return collection.count(query);
@@ -760,6 +811,7 @@ unittest
 	assert(user2.name == user.name);
 }
 
+// version(TestDB):
 unittest
 {
 	import vibe.db.mongo.mongo;
