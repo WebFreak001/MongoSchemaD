@@ -9,6 +9,7 @@ public import vibe.db.mongo.connection;
 
 public import mongoschema.date;
 public import mongoschema.db;
+public import mongoschema.variant;
 
 // Bson Attributes
 
