@@ -14,11 +14,14 @@ private enum bool distinctFieldNames(names...) = __traits(compiles, {
 		static foreach (__name; names)
 			static if (is(typeof(__name) : string))
 				mixin("enum int " ~ __name ~ " = 0;");
+			else
+				mixin("enum int " ~ __name.stringof ~ " = 0;");
 	});
 
 /// Represents a data type which can hold different kinds of values but always exactly one or none at a time.
 /// Types is a list of types the variant can hold. By default type IDs are assigned from the stringof value which is the type name without module name.
 /// You can pass custom type names by passing a string following the type.
+/// Those will affect the type value in the serialized bson and the convenience access function names.
 /// Serializes the Bson as `{"type": "T", "value": "my value here"}`
 final struct SchemaVariant(Specs...) if (distinctFieldNames!(Specs))
 {
@@ -139,7 +142,7 @@ public @safe:
 		static foreach (Field; Fields)
 			if (value.isType!(Field.Type))
 				return Bson([
-						"type": Bson(Field.Type.stringof),
+						"type": Bson(Field.name),
 						"value": toSchemaBson((() @trusted => value.value.get!(Field.Type))())
 						]);
 
@@ -159,7 +162,7 @@ public @safe:
 		{
 			static foreach (i, Field; Fields)
 			{
-		case Field.Type.stringof:
+		case Field.name:
 				return SchemaVariant!Specs(fromSchemaBson!(Field.Type)(bson["value"]));
 			}
 		default:
@@ -215,7 +218,7 @@ unittest
 	assert(var2.type == "Foo");
 	assert(var2.foo == Foo());
 	assert(typeof(var2).toBson(var2) == Bson([
-				"type": Bson("Foo"),
+				"type": Bson("foo"),
 				"value": Bson(["x": Bson(3)])
 			]));
 }
