@@ -94,7 +94,7 @@ final struct SchemaVariant(Specs...) if (distinctFieldNames!(Specs))
 		enum hasType = staticIndexOf!(T, Types) != -1;
 	}
 
-public @safe:
+public:
 	Algebraic!Types value;
 
 	this(T)(T value) @trusted
@@ -122,9 +122,9 @@ public @safe:
 		if (!value.hasValue)
 			return null;
 
-		static foreach (T; Types)
-			if (isType!T)
-				return T.stringof;
+		static foreach (Field; Fields)
+			if (isType!(Field.Type))
+				return Field.name;
 
 		assert(false, "Checked all possible types of variant but none of them matched?!");
 	}
