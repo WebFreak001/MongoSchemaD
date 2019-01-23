@@ -168,34 +168,52 @@ struct SchemaPipeline
 
 	/// Passes along the documents with only the specified fields to the next stage in the pipeline. The specified fields can be existing fields from the input documents or newly computed fields.
 	/// MongoDB Documentation: https://docs.mongodb.com/manual/reference/operator/aggregation/project/#pipe._S_project
-	auto project(Bson specifications)
+	SchemaPipeline project(Bson specifications)
 	{
 		assert(!finalized);
 		pipeline ~= Bson(["$project" : specifications]);
 		return this;
 	}
 
+	/// ditto
+	SchemaPipeline project(T)(T specifications)
+	{
+		return project(serializeToBson(specifications));
+	}
+
 	/// Filters the documents to pass only the documents that match the specified condition(s) to the next pipeline stage.
 	/// MongoDB Documentation: https://docs.mongodb.com/manual/reference/operator/aggregation/match/#pipe._S_match
-	auto match(Bson query)
+	SchemaPipeline match(Bson query)
 	{
 		assert(!finalized);
 		pipeline ~= Bson(["$match" : query]);
 		return this;
 	}
 
+	/// ditto
+	SchemaPipeline match(T)(T query)
+	{
+		return match(serializeToBson(query));
+	}
+
 	/// Restricts the contents of the documents based on information stored in the documents themselves.
 	/// MongoDB Documentation: https://docs.mongodb.com/manual/reference/operator/aggregation/redact/#pipe._S_redact
-	auto redact(Bson expression)
+	SchemaPipeline redact(Bson expression)
 	{
 		assert(!finalized);
 		pipeline ~= Bson(["$redact" : expression]);
 		return this;
 	}
 
+	/// ditto
+	SchemaPipeline redact(T)(T expression)
+	{
+		return redact(serializeToBson(expression));
+	}
+
 	/// Limits the number of documents passed to the next stage in the pipeline.
 	/// MongoDB Documentation: https://docs.mongodb.com/manual/reference/operator/aggregation/limit/#pipe._S_limit
-	auto limit(size_t count)
+	SchemaPipeline limit(size_t count)
 	{
 		assert(!finalized);
 		pipeline ~= Bson(["$limit" : Bson(count)]);
@@ -204,7 +222,7 @@ struct SchemaPipeline
 
 	/// Skips over the specified number of documents that pass into the stage and passes the remaining documents to the next stage in the pipeline.
 	/// MongoDB Documentation: https://docs.mongodb.com/manual/reference/operator/aggregation/skip/#pipe._S_skip
-	auto skip(size_t count)
+	SchemaPipeline skip(size_t count)
 	{
 		assert(!finalized);
 		pipeline ~= Bson(["$skip" : Bson(count)]);
@@ -213,7 +231,7 @@ struct SchemaPipeline
 
 	/// Deconstructs an array field from the input documents to output a document for each element. Each output document is the input document with the value of the array field replaced by the element.
 	/// MongoDB Documentation: https://docs.mongodb.com/manual/reference/operator/aggregation/unwind/#pipe._S_unwind
-	auto unwind(string path)
+	SchemaPipeline unwind(string path)
 	{
 		assert(!finalized);
 		pipeline ~= Bson(["$unwind" : Bson(path)]);
@@ -222,7 +240,7 @@ struct SchemaPipeline
 
 	/// Deconstructs an array field from the input documents to output a document for each element. Each output document is the input document with the value of the array field replaced by the element.
 	/// MongoDB Documentation: https://docs.mongodb.com/manual/reference/operator/aggregation/unwind/#pipe._S_unwind
-	auto unwind(PipelineUnwindOperation op)
+	SchemaPipeline unwind(PipelineUnwindOperation op)
 	{
 		assert(!finalized);
 		Bson opb = Bson(["path" : Bson(op.path)]);
@@ -234,7 +252,7 @@ struct SchemaPipeline
 
 	/// Deconstructs an array field from the input documents to output a document for each element. Each output document is the input document with the value of the array field replaced by the element.
 	/// MongoDB Documentation: https://docs.mongodb.com/manual/reference/operator/aggregation/unwind/#pipe._S_unwind
-	auto unwind(PipelineUnwindOperation op, bool preserveNullAndEmptyArrays)
+	SchemaPipeline unwind(PipelineUnwindOperation op, bool preserveNullAndEmptyArrays)
 	{
 		assert(!finalized);
 		Bson opb = Bson(["path" : Bson(op.path), "preserveNullAndEmptyArrays"
@@ -247,7 +265,7 @@ struct SchemaPipeline
 
 	/// Groups documents by some specified expression and outputs to the next stage a document for each distinct grouping. The output documents contain an _id field which contains the distinct group by key. The output documents can also contain computed fields that hold the values of some accumulator expression grouped by the $group‘s _id field. $group does not order its output documents.
 	/// MongoDB Documentation: https://docs.mongodb.com/manual/reference/operator/aggregation/group/#pipe._S_group
-	auto group(Bson id, Bson[string] accumulators)
+	SchemaPipeline group(Bson id, Bson[string] accumulators)
 	{
 		assert(!finalized);
 		accumulators["_id"] = id;
@@ -255,8 +273,14 @@ struct SchemaPipeline
 		return this;
 	}
 
+	/// ditto
+	SchemaPipeline group(K, T)(K id, T[string] accumulators)
+	{
+		return group(serializeToBson(id), serializeToBson(accumulators));
+	}
+
 	/// Groups all documents into one specified with the accumulators. Basically just runs group(null, accumulators)
-	auto groupAll(Bson[string] accumulators)
+	SchemaPipeline groupAll(Bson[string] accumulators)
 	{
 		assert(!finalized);
 		accumulators["_id"] = Bson(null);
@@ -264,10 +288,16 @@ struct SchemaPipeline
 		return this;
 	}
 
+	/// ditto
+	SchemaPipeline groupAll(T)(T[string] accumulators)
+	{
+		return groupAll(serializeToBson(accumulators));
+	}
+
 	/// Randomly selects the specified number of documents from its input.
 	/// Warning: $sample may output the same document more than once in its result set.
 	/// MongoDB Documentation: https://docs.mongodb.com/manual/reference/operator/aggregation/sample/#pipe._S_sample
-	auto sample(size_t count)
+	SchemaPipeline sample(size_t count)
 	{
 		assert(!finalized);
 		pipeline ~= Bson(["$sample" : Bson(count)]);
@@ -276,35 +306,53 @@ struct SchemaPipeline
 
 	/// Sorts all input documents and returns them to the pipeline in sorted order.
 	/// MongoDB Documentation: https://docs.mongodb.com/manual/reference/operator/aggregation/sort/#pipe._S_sort
-	auto sort(Bson sorter)
+	SchemaPipeline sort(Bson sorter)
 	{
 		assert(!finalized);
 		pipeline ~= Bson(["$sort" : sorter]);
 		return this;
 	}
 
+	/// ditto
+	SchemaPipeline sort(T)(T sorter)
+	{
+		return sort(serializeToBson(sorter));
+	}
+
 	/// Outputs documents in order of nearest to farthest from a specified point.
 	/// MongoDB Documentation: https://docs.mongodb.com/manual/reference/operator/aggregation/geoNear/#pipe._S_geoNear
-	auto geoNear(Bson options)
+	SchemaPipeline geoNear(Bson options)
 	{
 		assert(!finalized);
 		pipeline ~= Bson(["$geoNear" : options]);
 		return this;
 	}
 
+	/// ditto
+	SchemaPipeline geoNear(T)(T options)
+	{
+		return geoNear(serializeToBson(options));
+	}
+
 	/// Performs a left outer join to an unsharded collection in the same database to filter in documents from the “joined” collection for processing. The $lookup stage does an equality match between a field from the input documents with a field from the documents of the “joined” collection.
 	/// To each input document, the $lookup stage adds a new array field whose elements are the matching documents from the “joined” collection. The $lookup stage passes these reshaped documents to the next stage.
 	/// MongoDB Documentation: https://docs.mongodb.com/manual/reference/operator/aggregation/lookup/#pipe._S_lookup
-	auto lookup(Bson options)
+	SchemaPipeline lookup(Bson options)
 	{
 		assert(!finalized);
 		pipeline ~= Bson(["$lookup" : options]);
 		return this;
 	}
 
+	/// ditto
+	SchemaPipeline lookup(T)(T options)
+	{
+		return lookup(serializeToBson(options));
+	}
+
 	/// Takes the documents returned by the aggregation pipeline and writes them to a specified collection. The $out operator must be the last stage in the pipeline. The $out operator lets the aggregation framework return result sets of any size.
 	/// MongoDB Documentation: https://docs.mongodb.com/manual/reference/operator/aggregation/out/#pipe._S_out
-	auto outputTo(string outputCollection)
+	SchemaPipeline outputTo(string outputCollection)
 	{
 		assert(!finalized);
 		debug finalized = true;
@@ -314,7 +362,7 @@ struct SchemaPipeline
 
 	/// Returns statistics regarding the use of each index for the collection. If running with access control, the user must have privileges that include indexStats action.
 	/// MongoDB Documentation: https://docs.mongodb.com/manual/reference/operator/aggregation/indexStats/#pipe._S_indexStats
-	auto indexStats()
+	SchemaPipeline indexStats()
 	{
 		assert(!finalized);
 		pipeline ~= Bson(["$indexStats" : Bson.emptyObject]);
