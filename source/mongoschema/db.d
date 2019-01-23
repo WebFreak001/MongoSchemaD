@@ -265,11 +265,11 @@ struct SchemaPipeline
 
 	/// Groups documents by some specified expression and outputs to the next stage a document for each distinct grouping. The output documents contain an _id field which contains the distinct group by key. The output documents can also contain computed fields that hold the values of some accumulator expression grouped by the $group‘s _id field. $group does not order its output documents.
 	/// MongoDB Documentation: https://docs.mongodb.com/manual/reference/operator/aggregation/group/#pipe._S_group
-	SchemaPipeline group(Bson id, Bson[string] accumulators)
+	SchemaPipeline group(Bson id, Bson accumulators)
 	{
 		assert(!finalized);
 		accumulators["_id"] = id;
-		pipeline ~= Bson(["$group" : Bson(accumulators)]);
+		pipeline ~= Bson(["$group" : accumulators]);
 		return this;
 	}
 
@@ -280,11 +280,11 @@ struct SchemaPipeline
 	}
 
 	/// Groups all documents into one specified with the accumulators. Basically just runs group(null, accumulators)
-	SchemaPipeline groupAll(Bson[string] accumulators)
+	SchemaPipeline groupAll(Bson accumulators)
 	{
 		assert(!finalized);
 		accumulators["_id"] = Bson(null);
-		pipeline ~= Bson(["$group" : Bson(accumulators)]);
+		pipeline ~= Bson(["$group" : accumulators]);
 		return this;
 	}
 
