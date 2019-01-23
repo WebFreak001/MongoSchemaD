@@ -300,6 +300,7 @@ unittest
 		int number;
 		bool boolean;
 		string[] array;
+		@schemaName("t")
 		string text;
 	}
 
@@ -313,7 +314,7 @@ unittest
 					Bson([
 						"array": Bson(["$size": Bson(10)]),
 						"boolean": Bson(true),
-						"text": Bson(["$regex": Bson("^yes")])
+						"t": Bson(["$regex": Bson("^yes")])
 					]),
 				])
 			]).toString);
