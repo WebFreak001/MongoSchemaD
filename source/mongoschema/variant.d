@@ -215,7 +215,7 @@ unittest
 	SchemaVariant!(Foo, "foo", Bar, "bar") var2;
 	assert(typeof(var2).toBson(var2) == Bson.init);
 	var2 = Foo();
-	assert(var2.type == "Foo");
+	assert(var2.type == "foo");
 	assert(var2.foo == Foo());
 	assert(typeof(var2).toBson(var2) == Bson([
 				"type": Bson("foo"),
