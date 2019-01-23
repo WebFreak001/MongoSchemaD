@@ -10,7 +10,6 @@ import std.traits;
 /// Represents a field to compare
 struct FieldQuery(T, Obj)
 {
-@safe:
 	enum isCompatible(V) = is(V : T) || is(V == Bson);
 
 	Query!Obj* query;
@@ -259,7 +258,6 @@ private string generateMembers(T)(T obj)
 
 struct Query(T)
 {
-@safe:
 	Bson[string] _query;
 
 	mixin(generateMembers!T(T.init));
