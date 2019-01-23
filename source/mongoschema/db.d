@@ -197,7 +197,7 @@ struct SchemaPipeline
 	}
 
 	/// ditto
-	SchemaPipeline match(T)(T query)
+	SchemaPipeline match(T)(T[string] query)
 	{
 		return match(serializeToBson(query));
 	}
