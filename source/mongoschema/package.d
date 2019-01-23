@@ -1,6 +1,8 @@
 module mongoschema;
 
 import core.time;
+import std.array : appender;
+import std.conv;
 import std.traits;
 import std.typecons : BitFlags, isTuple;
 public import vibe.data.bson;
@@ -172,19 +174,33 @@ T bsonToMember(T)(auto ref T member, Bson value)
 		auto bsons = value.get!(Bson[]);
 		T values;
 		foreach (i, val; values)
-		{
 			values[i] = bsonToMember!(typeof(val))(values[i], bsons[i]);
-		}
 		return values;
 	}
-	else static if (isArray!T && !isSomeString!T)
+	else static if (isDynamicArray!T && !isSomeString!T)
+	{ // Arrays of anything except strings
+		alias Type = typeof(member[0]);
+		if (value.type != Bson.Type.array)
+			throw new Exception("Cannot convert from BSON type " ~ value.type.to!string ~ " to array");
+		auto arr = value.get!(Bson[]);
+		auto ret = appender!T();
+		ret.reserve(arr.length);
+		foreach (val; arr)
+			ret.put(bsonToMember!Type(Type.init, val));
+		return ret.data;
+	}
+	else static if (isStaticArray!T)
 	{ // Arrays of anything except strings
 		alias Type = typeof(member[0]);
 		T values;
-		foreach (val; value)
-		{
-			values ~= bsonToMember!Type(Type.init, val);
-		}
+		if (value.type != Bson.Type.array)
+			throw new Exception("Cannot convert from BSON type " ~ value.type.to!string ~ " to array");
+		auto arr = value.get!(Bson[]);
+		if (arr.length != values.length)
+			throw new Exception("Cannot convert from BSON array of length "
+					~ arr.length.to!string ~ " to array of length " ~ arr.length.to!string);
+		foreach (i, val; arr)
+			values[i] = bsonToMember!Type(Type.init, val);
 		return values;
 	}
 	else static if (isAssociativeArray!T)
@@ -200,13 +216,20 @@ T bsonToMember(T)(auto ref T member, Bson value)
 	{ // Already a Bson object
 		return value;
 	}
+	else static if (isNumeric!T)
+	{
+		if (value.type == Bson.Type.int_)
+			return cast(T) value.get!int;
+		else if (value.type == Bson.Type.long_)
+			return cast(T) value.get!long;
+		else if (value.type == Bson.Type.double_)
+			return cast(T) value.get!double;
+		else
+			throw new Exception(
+					"Cannot convert BSON from type " ~ value.type.to!string ~ " to " ~ T.stringof);
+	}
 	else static if (__traits(compiles, { value.get!T(); }))
-	{ // Check if this can be passed
-		static if (is(T == long))
-		{ // If the output expects a long, but the data is a int, do .get!int
-			if (value.type == Bson.Type.int_)
-				return value.get!int();
-		}
+	{
 		return value.get!T();
 	}
 	else static if (!isBasicType!T)

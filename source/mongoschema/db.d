@@ -832,6 +832,17 @@ unittest
 		Activity activity = Activity.Medium;
 		BitFlags!Permission permissions;
 		Tuple!(string, string) name;
+		ubyte x0;
+		byte x1;
+		ushort x2;
+		short x3;
+		uint x4;
+		int x5;
+		ulong x6;
+		long x7;
+		float x8;
+		double x9;
+		int[10] token;
 
 		Bson encodePassword(UserSchema user)
 		{
@@ -845,6 +856,17 @@ unittest
 	user.username = "Bob";
 	user.permissions = Permission.A | Permission.C;
 	user.name = tuple("Bob", "Bobby");
+	user.x0 = 7;
+	user.x1 = 7;
+	user.x2 = 7;
+	user.x3 = 7;
+	user.x4 = 7;
+	user.x5 = 7;
+	user.x6 = 7;
+	user.x7 = 7;
+	user.x8 = 7;
+	user.x9 = 7;
+	user.token[3] = 8;
 	auto bson = user.toSchemaBson();
 	assert(bson["username"].get!string == "Bob");
 	assert(bson["date-created"].get!(BsonDate).value > 0);
@@ -853,6 +875,18 @@ unittest
 	assert(bson["password"].get!(BsonBinData).rawData == sha1Of(user.password ~ user.salt));
 	assert(bson["permissions"].get!(int) == 5);
 	assert(bson["name"].get!(Bson[]).length == 2);
+	assert(bson["x0"].get!int == 7);
+	assert(bson["x1"].get!int == 7);
+	assert(bson["x2"].get!int == 7);
+	assert(bson["x3"].get!int == 7);
+	assert(bson["x4"].get!int == 7);
+	assert(bson["x5"].get!int == 7);
+	assert(bson["x6"].get!long == 7);
+	assert(bson["x7"].get!long == 7);
+	assert(bson["x8"].get!double == 7);
+	assert(bson["x9"].get!double == 7);
+	assert(bson["token"].get!(Bson[]).length == 10);
+	assert(bson["token"].get!(Bson[])[3].get!int == 8);
 
 	auto user2 = bson.fromSchemaBson!UserSchema();
 	assert(user2.username == user.username);
@@ -863,6 +897,17 @@ unittest
 	assert(user2.activity == user.activity);
 	assert(user2.permissions == user.permissions);
 	assert(user2.name == user.name);
+	assert(user2.x0 == user.x0);
+	assert(user2.x1 == user.x1);
+	assert(user2.x2 == user.x2);
+	assert(user2.x3 == user.x3);
+	assert(user2.x4 == user.x4);
+	assert(user2.x5 == user.x5);
+	assert(user2.x6 == user.x6);
+	assert(user2.x7 == user.x7);
+	assert(user2.x8 == user.x8);
+	assert(user2.x9 == user.x9);
+	assert(user2.token == user.token);
 }
 
 // version(TestDB):
