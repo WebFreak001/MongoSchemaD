@@ -2,6 +2,7 @@
 module mongoschema.date;
 
 import std.datetime.systime;
+import std.traits : isSomeString;
 
 import vibe.data.bson;
 
