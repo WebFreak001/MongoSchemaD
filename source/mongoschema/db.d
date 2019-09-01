@@ -715,62 +715,51 @@ void register(T)(MongoCollection collection) @safe
 		})();
 	}
 
-	foreach (memberName; __traits(allMembers, T))
+	static foreach (memberName; getSerializableMembers!obj)
 	{
-		static if (__traits(compiles, {
-				static s = isVariable!(__traits(getMember, obj, memberName));
-			}) && isVariable!(__traits(getMember, obj, memberName)))
 		{
-			static if (__traits(getProtection, __traits(getMember, obj, memberName)) == "public")
+			string name = memberName;
+			static if (hasUDA!((__traits(getMember, obj, memberName)), schemaName))
 			{
-				string name = memberName;
-				static if (!hasUDA!((__traits(getMember, obj, memberName)), schemaIgnore))
-				{
-					static if (hasUDA!((__traits(getMember, obj, memberName)), schemaName))
-					{
-						static assert(getUDAs!((__traits(getMember, obj, memberName)), schemaName)
-								.length == 1, "Member '" ~ memberName ~ "' can only have one name!");
-						name = getUDAs!((__traits(getMember, obj, memberName)), schemaName)[0].name;
-					}
-
-					IndexFlags flags = IndexFlags.None;
-					ulong expires = 0LU;
-					bool force;
-
-					static if (hasUDA!((__traits(getMember, obj, memberName)), mongoForceIndex))
-					{
-						force = true;
-					}
-					static if (hasUDA!((__traits(getMember, obj, memberName)), mongoBackground))
-					{
-						flags |= IndexFlags.Background;
-					}
-					static if (hasUDA!((__traits(getMember, obj, memberName)),
-							mongoDropDuplicates))
-					{
-						flags |= IndexFlags.DropDuplicates;
-					}
-					static if (hasUDA!((__traits(getMember, obj, memberName)), mongoSparse))
-					{
-						flags |= IndexFlags.Sparse;
-					}
-					static if (hasUDA!((__traits(getMember, obj, memberName)), mongoUnique))
-					{
-						flags |= IndexFlags.Unique;
-					}
-					static if (hasUDA!((__traits(getMember, obj, memberName)), mongoExpire))
-					{
-						static assert(getUDAs!((__traits(getMember, obj, memberName)), mongoExpire).length == 1,
-								"Member '" ~ memberName ~ "' can only have one expiry value!");
-						flags |= IndexFlags.ExpireAfterSeconds;
-						expires = getUDAs!((__traits(getMember, obj, memberName)), mongoExpire)[0]
-							.seconds;
-					}
-
-					if (flags != IndexFlags.None || force)
-						collection.ensureIndex([tuple(name, 1)], flags, dur!"seconds"(expires));
-				}
+				static assert(getUDAs!((__traits(getMember, obj, memberName)), schemaName)
+						.length == 1, "Member '" ~ memberName ~ "' can only have one name!");
+				name = getUDAs!((__traits(getMember, obj, memberName)), schemaName)[0].name;
 			}
+
+			IndexFlags flags = IndexFlags.None;
+			ulong expires = 0LU;
+			bool force;
+
+			static if (hasUDA!((__traits(getMember, obj, memberName)), mongoForceIndex))
+			{
+				force = true;
+			}
+			static if (hasUDA!((__traits(getMember, obj, memberName)), mongoBackground))
+			{
+				flags |= IndexFlags.Background;
+			}
+			static if (hasUDA!((__traits(getMember, obj, memberName)), mongoDropDuplicates))
+			{
+				flags |= IndexFlags.DropDuplicates;
+			}
+			static if (hasUDA!((__traits(getMember, obj, memberName)), mongoSparse))
+			{
+				flags |= IndexFlags.Sparse;
+			}
+			static if (hasUDA!((__traits(getMember, obj, memberName)), mongoUnique))
+			{
+				flags |= IndexFlags.Unique;
+			}
+			static if (hasUDA!((__traits(getMember, obj, memberName)), mongoExpire))
+			{
+				static assert(getUDAs!((__traits(getMember, obj, memberName)), mongoExpire)
+						.length == 1, "Member '" ~ memberName ~ "' can only have one expiry value!");
+				flags |= IndexFlags.ExpireAfterSeconds;
+				expires = getUDAs!((__traits(getMember, obj, memberName)), mongoExpire)[0].seconds;
+			}
+
+			if (flags != IndexFlags.None || force)
+				collection.ensureIndex([tuple(name, 1)], flags, dur!"seconds"(expires));
 		}
 	}
 }
@@ -804,6 +793,7 @@ unittest
 {
 	import std.digest.digest;
 	import std.digest.sha;
+	import std.datetime.systime;
 
 	enum Activity
 	{
@@ -829,6 +819,7 @@ unittest
 		string password;
 		@schemaName("date-created")
 		SchemaDate dateCreated = SchemaDate.now;
+		SysTime otherDate = BsonDate(1000000000).toSysTime();
 		Activity activity = Activity.Medium;
 		BitFlags!Permission permissions;
 		Tuple!(string, string) name;
@@ -870,6 +861,7 @@ unittest
 	auto bson = user.toSchemaBson();
 	assert(bson["username"].get!string == "Bob");
 	assert(bson["date-created"].get!(BsonDate).value > 0);
+	assert(bson["otherDate"].get!(BsonDate).value == 1000000000);
 	assert(bson["activity"].get!(int) == cast(int) Activity.Medium);
 	assert(bson["salt"].get!(BsonBinData).rawData == cast(ubyte[]) "foobar");
 	assert(bson["password"].get!(BsonBinData).rawData == sha1Of(user.password ~ user.salt));
@@ -894,6 +886,7 @@ unittest
 	assert(user2.salt == user.salt);
 	// dates are gonna differ as `user2` has the current time now and `user` a magic value to get the current time
 	assert(user2.dateCreated != user.dateCreated);
+	assert(user2.otherDate.stdTime == user.otherDate.stdTime);
 	assert(user2.activity == user.activity);
 	assert(user2.permissions == user.permissions);
 	assert(user2.name == user.name);
@@ -910,7 +903,66 @@ unittest
 	assert(user2.token == user.token);
 }
 
-// version(TestDB):
+unittest
+{
+	struct Private
+	{
+	private:
+		int x;
+	}
+
+	struct Something
+	{
+		Private p;
+	}
+
+	struct Public
+	{
+		int y;
+	}
+
+	struct Something2
+	{
+		Public p;
+	}
+
+	struct Something3
+	{
+		int y;
+		@schemaIgnore Private p;
+	}
+
+	struct SerializablePrivate
+	{
+		static Bson toBson(SerializablePrivate p)
+		{
+			return Bson(1);
+		}
+
+		static SerializablePrivate fromBson(Bson bson)
+		{
+			return SerializablePrivate.init;
+		}
+	}
+
+	struct Something4
+	{
+		SerializablePrivate p;
+	}
+
+	Something s;
+	Something2 s2;
+	Something3 s3;
+	Something4 s4;
+	static assert(__traits(compiles, { s2.toSchemaBson(); }));
+	static assert(!__traits(compiles, { s.toSchemaBson(); }),
+			"Private members are not serializable, so Private is empty and may not be used as type.");
+	static assert(__traits(compiles, { s3.toSchemaBson(); }),
+			"When adding schemaIgnore, empty structs must be ignored");
+	static assert(__traits(compiles, { s4.toSchemaBson(); }),
+			"Empty structs with custom (de)serialization must be ignored");
+}
+
 unittest
 {
 	import vibe.db.mongo.mongo;
@@ -968,7 +1020,7 @@ unittest
 	user.save();
 
 	auto actualFakeID = faker.bsonID;
-	faker = User.findOne(["username" : "NewExample"]);
+	faker = User.findOne(["username": "NewExample"]);
 
 	assert(actualFakeID != faker.bsonID);
 
@@ -977,9 +1029,9 @@ unittest
 		usr.profilePicture = "default.png"; // Reset all profile pictures
 		usr.save();
 	}
-	user = User.findOne(["username" : "NewExample"]);
-	user2 = User.findOne(["username" : "Bob"]);
-	faker = User.findOne(["username" : "Example_"]);
+	user = User.findOne(["username": "NewExample"]);
+	user2 = User.findOne(["username": "Bob"]);
+	faker = User.findOne(["username": "Example_"]);
 	assert(user.profilePicture == user2.profilePicture
 			&& user2.profilePicture == faker.profilePicture && faker.profilePicture == "default.png");
 
@@ -987,8 +1039,8 @@ unittest
 	user3.username = "User123";
 	user3.hash = sha512Of("486951");
 	user3.profilePicture = "new.png";
-	User.upsert(["username" : "User123"], user3.toSchemaBson);
-	user3 = User.findOne(["username" : "User123"]);
+	User.upsert(["username": "User123"], user3.toSchemaBson);
+	user3 = User.findOne(["username": "User123"]);
 	assert(user3.hash == sha512Of("486951"));
 	assert(user3.profilePicture == "new.png");
 }
@@ -1045,7 +1097,7 @@ unittest
 
 	User find(string name)
 	{
-		return User.findOne(["username" : name]);
+		return User.findOne(["username": name]);
 	}
 
 	User a = register("foo", "bar");

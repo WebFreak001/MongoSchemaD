@@ -3,6 +3,7 @@ module mongoschema;
 import core.time;
 import std.array : appender;
 import std.conv;
+import std.datetime.systime;
 import std.traits;
 import std.typecons : BitFlags, isTuple;
 public import vibe.data.bson;
@@ -71,11 +72,10 @@ struct mongoExpire
 
 package template isVariable(alias T)
 {
-	enum isVariable = !is(T) && is(typeof(T)) && !isCallable!T
-			&& !is(T == void) && !__traits(isStaticFunction, T) && !__traits(isOverrideFunction, T)
-			&& !__traits(isFinalFunction, T) && !__traits(isAbstractFunction, T)
-			&& !__traits(isVirtualFunction, T) && !__traits(isVirtualMethod,
-					T) && !is(ReturnType!T);
+	enum isVariable = !is(T) && is(typeof(T)) && !isCallable!T && !is(T == void)
+		&& !__traits(isStaticFunction, T) && !__traits(isOverrideFunction, T) && !__traits(isFinalFunction,
+				T) && !__traits(isAbstractFunction, T) && !__traits(isVirtualFunction,
+				T) && !__traits(isVirtualMethod, T) && !is(ReturnType!T);
 }
 
 package template isVariable(T)
@@ -96,10 +96,13 @@ Bson memberToBson(T)(T member)
 		return Bson.fromJson(member);
 	}
 	else static if (is(T == BsonBinData) || is(T == BsonObjectID)
-			|| is(T == BsonDate) || is(T == BsonTimestamp)
-			|| is(T == BsonRegex) || is(T == typeof(null)))
+			|| is(T == BsonDate) || is(T == BsonTimestamp) || is(T == BsonRegex) || is(T == typeof(null)))
 	{
 		return Bson(member);
+	}
+	else static if (is(T == SysTime))
+	{
+		return Bson(BsonDate(member));
 	}
 	else static if (is(T == enum))
 	{ // Enum value
@@ -160,6 +163,10 @@ T bsonToMember(T)(auto ref T member, Bson value)
 			|| is(T == BsonDate) || is(T == BsonTimestamp) || is(T == BsonRegex))
 	{
 		return value.get!T;
+	}
+	else static if (is(T == SysTime))
+	{
+		return value.get!BsonDate.toSysTime();
 	}
 	else static if (is(T == enum))
 	{ // Enum value
@@ -244,6 +251,37 @@ T bsonToMember(T)(auto ref T member, Bson value)
 	}
 }
 
+string[] getSerializableMembers(alias obj)()
+{
+	alias T = typeof(obj);
+	string[] ret;
+	foreach (memberName; __traits(allMembers, T))
+	{
+		static if (memberName == "_schema_object_id_")
+			continue;
+		else static if (__traits(compiles, {
+				static s = isVariable!(__traits(getMember, obj, memberName));
+			}) && isVariable!(__traits(getMember, obj, memberName)) && !__traits(compiles, {
+				static s = __traits(getMember, T, memberName);
+			}) // No static members
+			 && __traits(compiles, {
+				typeof(__traits(getMember, obj, memberName)) t = __traits(getMember, obj, memberName);
+			}))
+		{
+			static if (__traits(getProtection, __traits(getMember, obj, memberName)) == "public")
+			{
+				string name = memberName;
+				Bson value;
+				static if (!hasUDA!((__traits(getMember, obj, memberName)), schemaIgnore))
+				{
+					ret ~= memberName;
+				}
+			}
+		}
+	}
+	return ret;
+}
+
 /// Generates a Bson document from a struct/class object
 Bson toSchemaBson(T)(T obj)
 {
@@ -257,75 +295,60 @@ Bson toSchemaBson(T)(T obj)
 
 	Bson data = Bson.emptyObject;
 
+	enum members = getSerializableMembers!obj;
+
 	static if (hasMember!(T, "_schema_object_id_"))
 	{
 		if (obj.bsonID.valid)
 			data["_id"] = obj.bsonID;
 	}
+	else static if (members.length == 0)
+		static assert(false, "Trying to MongoSchema serialize type " ~ T.stringof ~ " with no (accessible) members. Annotate member with @schemaIgnore if intended or provide a custom toBson and fromBson method.");
 
-	foreach (memberName; __traits(allMembers, T))
+	static foreach (memberName; members)
 	{
-		static if (memberName == "_schema_object_id_")
-			continue;
-		else static if (__traits(compiles, {
-				static s = isVariable!(__traits(getMember, obj, memberName));
-			}) && isVariable!(__traits(getMember, obj, memberName)) && !__traits(compiles, {
-				static s = __traits(getMember, T, memberName);
-			}) // No static members
-			 && __traits(compiles, {
-				typeof(__traits(getMember, obj, memberName)) t = __traits(getMember,
-				obj, memberName);
-			}))
 		{
-			static if (__traits(getProtection, __traits(getMember, obj, memberName)) == "public")
+			string name = memberName;
+			Bson value;
+			static if (hasUDA!((__traits(getMember, obj, memberName)), schemaName))
 			{
-				string name = memberName;
-				Bson value;
-				static if (!hasUDA!((__traits(getMember, obj, memberName)), schemaIgnore))
-				{
-					static if (hasUDA!((__traits(getMember, obj, memberName)), schemaName))
-					{
-						static assert(getUDAs!((__traits(getMember, obj, memberName)), schemaName)
-								.length == 1, "Member '" ~ memberName ~ "' can only have one name!");
-						name = getUDAs!((__traits(getMember, obj, memberName)), schemaName)[0].name;
-					}
-
-					static if (hasUDA!((__traits(getMember, obj, memberName)), encode))
-					{
-						static assert(getUDAs!((__traits(getMember, obj, memberName)), encode).length == 1,
-								"Member '" ~ memberName ~ "' can only have one encoder!");
-						mixin("value = obj." ~ getUDAs!((__traits(getMember,
-								obj, memberName)), encode)[0].func ~ "(obj);");
-					}
-					else static if (hasUDA!((__traits(getMember, obj, memberName)), binaryType))
-					{
-						static assert(isArray!(typeof((__traits(getMember, obj,
-								memberName)))) && typeof((__traits(getMember, obj, memberName))[0]).sizeof == 1,
-								"Binary member '" ~ memberName
-								~ "' can only be an array of 1 byte values");
-						static assert(getUDAs!((__traits(getMember, obj, memberName)), binaryType).length == 1,
-								"Binary member '" ~ memberName ~ "' can only have one type!");
-						BsonBinData.Type type = getUDAs!((__traits(getMember,
-								obj, memberName)), binaryType)[0].type;
-						value = Bson(BsonBinData(type,
-								cast(immutable(ubyte)[])(__traits(getMember, obj, memberName))));
-					}
-					else
-					{
-						static if (__traits(compiles, {
-								__traits(hasMember, typeof((__traits(getMember,
-								obj, memberName))), "toBson");
-							}) && __traits(hasMember, typeof((__traits(getMember, obj,
-								memberName))), "toBson") && !is(ReturnType!(typeof((__traits(getMember,
-								obj, memberName)).toBson)) == Bson))
-							pragma(msg, "Warning: ", typeof((__traits(getMember, obj, memberName))).stringof,
-									".toBson does not return a vibe.data.bson.Bson struct!");
-
-						value = memberToBson(__traits(getMember, obj, memberName));
-					}
-					data[name] = value;
-				}
+				static assert(getUDAs!((__traits(getMember, obj, memberName)), schemaName)
+						.length == 1, "Member '" ~ memberName ~ "' can only have one name!");
+				name = getUDAs!((__traits(getMember, obj, memberName)), schemaName)[0].name;
 			}
+
+			static if (hasUDA!((__traits(getMember, obj, memberName)), encode))
+			{
+				static assert(getUDAs!((__traits(getMember, obj, memberName)), encode)
+						.length == 1, "Member '" ~ memberName ~ "' can only have one encoder!");
+				mixin("value = obj." ~ getUDAs!((__traits(getMember, obj, memberName)),
+						encode)[0].func ~ "(obj);");
+			}
+			else static if (hasUDA!((__traits(getMember, obj, memberName)), binaryType))
+			{
+				static assert(isArray!(typeof((__traits(getMember, obj,
+						memberName)))) && typeof((__traits(getMember, obj, memberName))[0]).sizeof == 1,
+						"Binary member '" ~ memberName ~ "' can only be an array of 1 byte values");
+				static assert(getUDAs!((__traits(getMember, obj, memberName)), binaryType)
+						.length == 1, "Binary member '" ~ memberName ~ "' can only have one type!");
+				BsonBinData.Type type = getUDAs!((__traits(getMember, obj, memberName)), binaryType)[0]
+					.type;
+				value = Bson(BsonBinData(type,
+						cast(immutable(ubyte)[])(__traits(getMember, obj, memberName))));
+			}
+			else
+			{
+				static if (__traits(compiles, {
+						__traits(hasMember, typeof((__traits(getMember, obj, memberName))), "toBson");
+					}) && __traits(hasMember, typeof((__traits(getMember, obj,
+						memberName))), "toBson") && !is(ReturnType!(typeof((__traits(getMember,
+						obj, memberName)).toBson)) == Bson))
+					pragma(msg, "Warning: ", typeof((__traits(getMember, obj, memberName)))
+							.stringof, ".toBson does not return a vibe.data.bson.Bson struct!");
+
+				value = memberToBson(__traits(getMember, obj, memberName));
+			}
+			data[name] = value;
 		}
 	}
 
@@ -350,61 +373,41 @@ T fromSchemaBson(T)(Bson bson)
 			obj.bsonID = bson["_id"].get!BsonObjectID;
 	}
 
-	foreach (memberName; __traits(allMembers, T))
+	static foreach (memberName; getSerializableMembers!obj)
 	{
-		static if (memberName == "_schema_object_id_")
-			continue;
-		else static if (__traits(compiles, {
-				static s = isVariable!(__traits(getMember, obj, memberName));
-			}) && isVariable!(__traits(getMember, obj, memberName)) && !__traits(compiles, {
-				static s = __traits(getMember, T, memberName);
-			}) // No static members
-			 && __traits(compiles, {
-				typeof(__traits(getMember, obj, memberName)) t = __traits(getMember,
-				obj, memberName);
-			}))
 		{
-			static if (__traits(getProtection, __traits(getMember, obj, memberName)) == "public")
+			string name = memberName;
+			static if (hasUDA!((__traits(getMember, obj, memberName)), schemaName))
 			{
-				string name = memberName;
-				static if (!hasUDA!((__traits(getMember, obj, memberName)), schemaIgnore))
+				static assert(getUDAs!((__traits(getMember, obj, memberName)), schemaName)
+						.length == 1, "Member '" ~ memberName ~ "' can only have one name!");
+				name = getUDAs!((__traits(getMember, obj, memberName)), schemaName)[0].name;
+			}
+
+			// compile time code will still be generated but not run at runtime
+			if (!bson.tryIndex(name).isNull && bson[name].type != Bson.Type.undefined)
+			{
+				static if (hasUDA!((__traits(getMember, obj, memberName)), decode))
 				{
-					static if (hasUDA!((__traits(getMember, obj, memberName)), schemaName))
-					{
-						static assert(getUDAs!((__traits(getMember, obj, memberName)), schemaName)
-								.length == 1, "Member '" ~ memberName ~ "' can only have one name!");
-						name = getUDAs!((__traits(getMember, obj, memberName)), schemaName)[0].name;
-					}
-
-					// compile time code will still be generated but not run at runtime
-					if (bson.tryIndex(name).isNull || bson[name].type == Bson.Type.undefined)
-						continue;
-
-					static if (hasUDA!((__traits(getMember, obj, memberName)), decode))
-					{
-						static assert(getUDAs!((__traits(getMember, obj, memberName)), decode).length == 1,
-								"Member '" ~ memberName ~ "' can only have one decoder!");
-						mixin("obj." ~ memberName ~ " = obj." ~ getUDAs!((__traits(getMember,
-								obj, memberName)), decode)[0].func ~ "(bson);");
-					}
-					else static if (hasUDA!((__traits(getMember, obj, memberName)), binaryType))
-					{
-						static assert(isArray!(typeof((__traits(getMember, obj,
-								memberName)))) && typeof((__traits(getMember, obj, memberName))[0]).sizeof == 1,
-								"Binary member '" ~ memberName
-								~ "' can only be an array of 1 byte values");
-						static assert(getUDAs!((__traits(getMember, obj, memberName)), binaryType).length == 1,
-								"Binary member '" ~ memberName ~ "' can only have one type!");
-						assert(bson[name].type == Bson.Type.binData);
-						auto data = bson[name].get!(BsonBinData).rawData;
-						mixin("obj." ~ memberName ~ " = cast(typeof(obj." ~ memberName ~ ")) data;");
-					}
-					else
-					{
-						mixin(
-								"obj." ~ memberName ~ " = bsonToMember(obj."
-								~ memberName ~ ", bson[name]);");
-					}
+					static assert(getUDAs!((__traits(getMember, obj, memberName)), decode)
+							.length == 1, "Member '" ~ memberName ~ "' can only have one decoder!");
+					mixin("obj." ~ memberName ~ " = obj." ~ getUDAs!((__traits(getMember,
+							obj, memberName)), decode)[0].func ~ "(bson);");
+				}
+				else static if (hasUDA!((__traits(getMember, obj, memberName)), binaryType))
+				{
+					static assert(isArray!(typeof((__traits(getMember, obj,
+							memberName)))) && typeof((__traits(getMember, obj, memberName))[0]).sizeof == 1,
+							"Binary member '" ~ memberName ~ "' can only be an array of 1 byte values");
+					static assert(getUDAs!((__traits(getMember, obj, memberName)), binaryType)
+							.length == 1, "Binary member '" ~ memberName ~ "' can only have one type!");
+					assert(bson[name].type == Bson.Type.binData);
+					auto data = bson[name].get!(BsonBinData).rawData;
+					mixin("obj." ~ memberName ~ " = cast(typeof(obj." ~ memberName ~ ")) data;");
+				}
+				else
+				{
+					mixin("obj." ~ memberName ~ " = bsonToMember(obj." ~ memberName ~ ", bson[name]);");
 				}
 			}
 		}

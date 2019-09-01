@@ -224,33 +224,17 @@ private string generateMember(string member, string name)
 private string generateMembers(T)(T obj)
 {
 	string ret;
-	foreach (memberName; __traits(allMembers, T))
+	static foreach (memberName; getSerializableMembers!obj)
 	{
-		static if (memberName == "_schema_object_id_")
-			continue;
-		else static if (__traits(compiles, {
-				static s = isVariable!(__traits(getMember, obj, memberName));
-			}) && isVariable!(__traits(getMember, obj, memberName)) && !__traits(compiles, {
-				static s = __traits(getMember, T, memberName);
-			}) // No static members
-			 && __traits(compiles, {
-				typeof(__traits(getMember, obj, memberName)) t = __traits(getMember, obj, memberName);
-			}))
 		{
-			static if (__traits(getProtection, __traits(getMember, obj, memberName)) == "public")
+			string name = memberName;
+			static if (hasUDA!((__traits(getMember, obj, memberName)), schemaName))
 			{
-				string name = memberName;
-				static if (!hasUDA!((__traits(getMember, obj, memberName)), schemaIgnore))
-				{
-					static if (hasUDA!((__traits(getMember, obj, memberName)), schemaName))
-					{
-						static assert(getUDAs!((__traits(getMember, obj, memberName)), schemaName)
-								.length == 1, "Member '" ~ memberName ~ "' can only have one name!");
-						name = getUDAs!((__traits(getMember, obj, memberName)), schemaName)[0].name;
-					}
-					ret ~= generateMember(memberName, name);
-				}
+				static assert(getUDAs!((__traits(getMember, obj, memberName)), schemaName)
+						.length == 1, "Member '" ~ memberName ~ "' can only have one name!");
+				name = getUDAs!((__traits(getMember, obj, memberName)), schemaName)[0].name;
 			}
+			ret ~= generateMember(memberName, name);
 		}
 	}
 	return ret;
