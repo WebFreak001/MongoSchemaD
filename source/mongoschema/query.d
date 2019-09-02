@@ -228,13 +228,16 @@ private string generateMembers(T)(T obj)
 	{
 		{
 			string name = memberName;
-			static if (hasUDA!((__traits(getMember, obj, memberName)), schemaName))
+			static if (hasUDA!(__traits(getMember, obj, memberName), schemaName))
 			{
-				static assert(getUDAs!((__traits(getMember, obj, memberName)), schemaName)
+				static assert(getUDAs!(__traits(getMember, obj, memberName), schemaName)
 						.length == 1, "Member '" ~ memberName ~ "' can only have one name!");
-				name = getUDAs!((__traits(getMember, obj, memberName)), schemaName)[0].name;
+				name = getUDAs!(__traits(getMember, obj, memberName), schemaName)[0].name;
 			}
-			ret ~= generateMember(memberName, name);
+
+			static if (!hasUDA!(__traits(getMember, obj, memberName), encode)
+					&& !hasUDA!(__traits(getMember, obj, memberName), decode))
+				ret ~= generateMember(memberName, name);
 		}
 	}
 	return ret;
