@@ -1,0 +1,19 @@
+name: CI
+
+on: [push]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v1
+    - uses: WebFreak001/setup-dmd@releases/v1
+      with:
+        dmd-version: 2.088.0
+    - name: Build
+      run: dub build
+    #- name: Start MongoDB
+    #  run: mongod --bind_ip 127.0.0.1 --fork
+    #- name: Run tests
+    #  run: dub test
