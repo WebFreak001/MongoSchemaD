@@ -8,15 +8,15 @@ jobs:
 
     strategy:
       matrix:
-        dmd_version: [2.088.0, 2.087.1, 2.086.1]
+        dcompiler: [dmd-latest, dmd-beta, dmd-master, dmd-2.088.0, dmd-2.087.1, dmd-2.086.1, dmd-2.064.2, ldc-latest, ldc-beta, ldc-master]
         os: [ubuntu-latest, windows-latest, macOS-latest]
 
     steps:
     - uses: actions/checkout@v1
-    - name: Install DMD ${{ matrix.dmd_version }}
-      uses: WebFreak001/setup-dmd@releases/v1
+    - name: Install ${{ matrix.dcompiler }}
+      uses: WebFreak001/setup-dlang@releases/v0_webfreak
       with:
-        dmd-version: ${{ matrix.dmd_version }}
+        compiler: ${{ matrix.dcompiler }}
     - name: Build
       run: dub build
     #- name: Start MongoDB
