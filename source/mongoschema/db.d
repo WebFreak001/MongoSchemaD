@@ -171,7 +171,7 @@ struct SchemaPipeline
 	SchemaPipeline project(Bson specifications)
 	{
 		assert(!finalized);
-		pipeline ~= Bson(["$project" : specifications]);
+		pipeline ~= Bson(["$project": specifications]);
 		return this;
 	}
 
@@ -186,7 +186,7 @@ struct SchemaPipeline
 	SchemaPipeline match(Bson query)
 	{
 		assert(!finalized);
-		pipeline ~= Bson(["$match" : query]);
+		pipeline ~= Bson(["$match": query]);
 		return this;
 	}
 
@@ -207,7 +207,7 @@ struct SchemaPipeline
 	SchemaPipeline redact(Bson expression)
 	{
 		assert(!finalized);
-		pipeline ~= Bson(["$redact" : expression]);
+		pipeline ~= Bson(["$redact": expression]);
 		return this;
 	}
 
@@ -222,7 +222,7 @@ struct SchemaPipeline
 	SchemaPipeline limit(size_t count)
 	{
 		assert(!finalized);
-		pipeline ~= Bson(["$limit" : Bson(count)]);
+		pipeline ~= Bson(["$limit": Bson(count)]);
 		return this;
 	}
 
@@ -231,7 +231,7 @@ struct SchemaPipeline
 	SchemaPipeline skip(size_t count)
 	{
 		assert(!finalized);
-		pipeline ~= Bson(["$skip" : Bson(count)]);
+		pipeline ~= Bson(["$skip": Bson(count)]);
 		return this;
 	}
 
@@ -240,7 +240,7 @@ struct SchemaPipeline
 	SchemaPipeline unwind(string path)
 	{
 		assert(!finalized);
-		pipeline ~= Bson(["$unwind" : Bson(path)]);
+		pipeline ~= Bson(["$unwind": Bson(path)]);
 		return this;
 	}
 
@@ -249,10 +249,10 @@ struct SchemaPipeline
 	SchemaPipeline unwind(PipelineUnwindOperation op)
 	{
 		assert(!finalized);
-		Bson opb = Bson(["path" : Bson(op.path)]);
+		Bson opb = Bson(["path": Bson(op.path)]);
 		if (op.includeArrayIndex !is null)
 			opb["includeArrayIndex"] = Bson(op.includeArrayIndex);
-		pipeline ~= Bson(["$unwind" : opb]);
+		pipeline ~= Bson(["$unwind": opb]);
 		return this;
 	}
 
@@ -261,11 +261,13 @@ struct SchemaPipeline
 	SchemaPipeline unwind(PipelineUnwindOperation op, bool preserveNullAndEmptyArrays)
 	{
 		assert(!finalized);
-		Bson opb = Bson(["path" : Bson(op.path), "preserveNullAndEmptyArrays"
-				: Bson(preserveNullAndEmptyArrays)]);
+		Bson opb = Bson([
+				"path": Bson(op.path),
+				"preserveNullAndEmptyArrays": Bson(preserveNullAndEmptyArrays)
+				]);
 		if (op.includeArrayIndex !is null)
 			opb["includeArrayIndex"] = Bson(op.includeArrayIndex);
-		pipeline ~= Bson(["$unwind" : opb]);
+		pipeline ~= Bson(["$unwind": opb]);
 		return this;
 	}
 
@@ -275,7 +277,7 @@ struct SchemaPipeline
 	{
 		assert(!finalized);
 		accumulators["_id"] = id;
-		pipeline ~= Bson(["$group" : accumulators]);
+		pipeline ~= Bson(["$group": accumulators]);
 		return this;
 	}
 
@@ -290,7 +292,7 @@ struct SchemaPipeline
 	{
 		assert(!finalized);
 		accumulators["_id"] = Bson(null);
-		pipeline ~= Bson(["$group" : accumulators]);
+		pipeline ~= Bson(["$group": accumulators]);
 		return this;
 	}
 
@@ -306,7 +308,7 @@ struct SchemaPipeline
 	SchemaPipeline sample(size_t count)
 	{
 		assert(!finalized);
-		pipeline ~= Bson(["$sample" : Bson(count)]);
+		pipeline ~= Bson(["$sample": Bson(count)]);
 		return this;
 	}
 
@@ -315,7 +317,7 @@ struct SchemaPipeline
 	SchemaPipeline sort(Bson sorter)
 	{
 		assert(!finalized);
-		pipeline ~= Bson(["$sort" : sorter]);
+		pipeline ~= Bson(["$sort": sorter]);
 		return this;
 	}
 
@@ -330,7 +332,7 @@ struct SchemaPipeline
 	SchemaPipeline geoNear(Bson options)
 	{
 		assert(!finalized);
-		pipeline ~= Bson(["$geoNear" : options]);
+		pipeline ~= Bson(["$geoNear": options]);
 		return this;
 	}
 
@@ -346,7 +348,7 @@ struct SchemaPipeline
 	SchemaPipeline lookup(Bson options)
 	{
 		assert(!finalized);
-		pipeline ~= Bson(["$lookup" : options]);
+		pipeline ~= Bson(["$lookup": options]);
 		return this;
 	}
 
@@ -362,7 +364,7 @@ struct SchemaPipeline
 	{
 		assert(!finalized);
 		debug finalized = true;
-		pipeline ~= Bson(["$out" : Bson(outputCollection)]);
+		pipeline ~= Bson(["$out": Bson(outputCollection)]);
 		return this;
 	}
 
@@ -371,7 +373,7 @@ struct SchemaPipeline
 	SchemaPipeline indexStats()
 	{
 		assert(!finalized);
-		pipeline ~= Bson(["$indexStats" : Bson.emptyObject]);
+		pipeline ~= Bson(["$indexStats": Bson.emptyObject]);
 		return this;
 	}
 
@@ -418,7 +420,7 @@ mixin template MongoSchema()
 	{
 		if (_schema_object_id_.valid)
 		{
-			collection.update(Bson(["_id" : Bson(_schema_object_id_)]),
+			collection.update(Bson(["_id": Bson(_schema_object_id_)]),
 					this.toSchemaBson(), UpdateFlags.upsert);
 		}
 		else
@@ -434,7 +436,7 @@ mixin template MongoSchema()
 	{
 		if (_schema_object_id_.valid)
 		{
-			collection.update(Bson(["_id" : Bson(_schema_object_id_)]),
+			collection.update(Bson(["_id": Bson(_schema_object_id_)]),
 					Bson(["$set": this.toSchemaBson()]), UpdateFlags.upsert);
 		}
 		else
@@ -450,8 +452,7 @@ mixin template MongoSchema()
 	{
 		if (!_schema_object_id_.valid)
 			return false;
-		collection.remove(Bson(["_id" : Bson(_schema_object_id_)]),
-				DeleteFlags.SingleRemove);
+		collection.remove(Bson(["_id": Bson(_schema_object_id_)]), DeleteFlags.SingleRemove);
 		return true;
 	}
 
@@ -475,7 +476,7 @@ mixin template MongoSchema()
 	/// Throws: DocumentNotFoundException if not found
 	static typeof(this) findById(BsonObjectID id)
 	{
-		return fromSchemaBson!(typeof(this))(findOneOrThrow(Bson(["_id" : Bson(id)])));
+		return fromSchemaBson!(typeof(this))(findOneOrThrow(Bson(["_id": Bson(id)])));
 	}
 
 	/// Finds one element with the hex id `id`.
@@ -501,7 +502,7 @@ mixin template MongoSchema()
 	/// Tries to find a document by the _id field and returns a Nullable which `isNull` if it could not be found. Otherwise it will be the document wrapped in the nullable.
 	static Nullable!(typeof(this)) tryFindById(BsonObjectID id)
 	{
-		Bson found = collection.findOne(Bson(["_id" : Bson(id)]));
+		Bson found = collection.findOne(Bson(["_id": Bson(id)]));
 		if (found.isNull)
 			return Nullable!(typeof(this)).init;
 		return Nullable!(typeof(this))(fromSchemaBson!(typeof(this))(found));
@@ -531,7 +532,7 @@ mixin template MongoSchema()
 	/// Tries to find a document by the _id field and returns a default value if it could not be found.
 	static typeof(this) tryFindById(BsonObjectID id, typeof(this) defaultValue)
 	{
-		Bson found = collection.findOne(Bson(["_id" : Bson(id)]));
+		Bson found = collection.findOne(Bson(["_id": Bson(id)]));
 		if (found.isNull)
 			return defaultValue;
 		return fromSchemaBson!(typeof(this))(found);
@@ -559,8 +560,8 @@ mixin template MongoSchema()
 	}
 
 	/// Finds one or more elements using a query.
-	static typeof(this)[] find(Query!(typeof(this)) query, QueryFlags flags = QueryFlags.None,
-			int num_skip = 0, int num_docs_per_chunk = 0)
+	static typeof(this)[] find(Query!(typeof(this)) query,
+			QueryFlags flags = QueryFlags.None, int num_skip = 0, int num_docs_per_chunk = 0)
 	{
 		return find(query._query, flags, num_skip, num_docs_per_chunk);
 	}
@@ -600,7 +601,7 @@ mixin template MongoSchema()
 
 	/// Inserts many documents at once. The resulting IDs of the symbols will be generated by the server and not known to the caller.
 	static void insertMany(T)(T documents, InsertFlags options = InsertFlags.none)
-		if (isInputRange!T && is(ElementType!T : typeof(this)))
+			if (isInputRange!T && is(ElementType!T : typeof(this)))
 	{
 		import std.array : array;
 		import std.algorithm : map;
@@ -614,7 +615,8 @@ mixin template MongoSchema()
 	}
 
 	/// Updates a document.
-	static void update(U)(Query!(typeof(this)) query, U update, UpdateFlags options = UpdateFlags.none)
+	static void update(U)(Query!(typeof(this)) query, U update, UpdateFlags options = UpdateFlags
+			.none)
 	{
 		update(query._query, update, options);
 	}
@@ -626,7 +628,8 @@ mixin template MongoSchema()
 	}
 
 	/// Updates a document or inserts it when not existent. Shorthand for `update(..., UpdateFlags.upsert)`
-	static void upsert(U)(Query!(typeof(this)) query, U upsert, UpdateFlags options = UpdateFlags.upsert)
+	static void upsert(U)(Query!(typeof(this)) query, U upsert,
+			UpdateFlags options = UpdateFlags.upsert)
 	{
 		upsert(query._query, upsert, options);
 	}
