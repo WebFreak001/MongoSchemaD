@@ -103,21 +103,21 @@ public:
 	}
 
 	static foreach (Field; Fields)
-		mixin("Field.Type " ~ Field.name
-				~ "() @trusted { checkType!(Field.Type); return value.get!(Field.Type); }");
+		mixin("inout(Field.Type) " ~ Field.name
+				~ "() @trusted inout { checkType!(Field.Type); return value.get!(Field.Type); }");
 
-	void checkType(T)()
+	void checkType(T)() const
 	{
 		if (!isType!T)
 			throw new Exception("Attempted to access " ~ type ~ " field as " ~ T.stringof);
 	}
 
-	bool isType(T)() @trusted
+	bool isType(T)() @trusted const
 	{
 		return value.type == typeid(T);
 	}
 
-	string type()
+	string type() const
 	{
 		if (!value.hasValue)
 			return null;
@@ -218,6 +218,14 @@ unittest
 	assert(var2.type == "foo");
 	assert(var2.foo == Foo());
 	assert(typeof(var2).toBson(var2) == Bson([
+				"type": Bson("foo"),
+				"value": Bson(["x": Bson(3)])
+			]));
+
+	const x = var2;
+	assert(x.type == "foo");
+	assert(x.isType!Foo);
+	assert(typeof(x).toBson(x) == Bson([
 				"type": Bson("foo"),
 				"value": Bson(["x": Bson(3)])
 			]));
