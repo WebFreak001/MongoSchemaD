@@ -415,6 +415,12 @@ mixin template MongoSchema()
 		return _schema_object_id_;
 	}
 
+	/// ditto
+	@property const(BsonObjectID) bsonID() const @safe
+	{
+		return _schema_object_id_;
+	}
+
 	/// Inserts or updates an existing value.
 	void save()
 	{
