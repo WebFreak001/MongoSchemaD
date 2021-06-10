@@ -456,7 +456,7 @@ mixin template MongoSchema()
 	}
 
 	/// Removes this object from the collection. Returns false when _id of this is not set.
-	bool remove() @safe const
+	bool remove() @trusted const
 	{
 		if (!_schema_object_id_.valid)
 			return false;
