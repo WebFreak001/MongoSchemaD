@@ -11,9 +11,11 @@ import std.typecons : BitFlags, tuple, Tuple;
 /// Range for iterating over a collection using a Schema.
 struct DocumentRange(Schema)
 {
-	private MongoCursor!(Bson, Bson, typeof(null)) _cursor;
+	alias Cursor = MongoCursor!Bson;
 
-	public this(MongoCursor!(Bson, Bson, typeof(null)) cursor)
+	private Cursor _cursor;
+
+	public this(Cursor cursor)
 	{
 		_cursor = cursor;
 	}
@@ -377,7 +379,7 @@ struct SchemaPipeline
 		return this;
 	}
 
-	Bson run()
+	Bson run() @trusted // workaround because old vibe.d versions mistagged aggregate safety
 	{
 		debug finalized = true;
 		return _collection.aggregate(pipeline);
@@ -410,7 +412,7 @@ mixin template MongoSchema()
 	}
 
 	/// Returns: the _id value (if set by save or find)
-	@property ref BsonObjectID bsonID() @safe
+	@property ref BsonObjectID bsonID() @safe return
 	{
 		return _schema_object_id_;
 	}
@@ -727,48 +729,82 @@ void register(T)(MongoCollection collection) @safe
 	static foreach (memberName; getSerializableMembers!obj)
 	{
 		{
+			alias member = __traits(getMember, obj, memberName);
+
 			string name = memberName;
-			static if (hasUDA!((__traits(getMember, obj, memberName)), schemaName))
+			static if (hasUDA!(member, schemaName))
 			{
-				static assert(getUDAs!((__traits(getMember, obj, memberName)), schemaName)
+				static assert(getUDAs!(member, schemaName)
 						.length == 1, "Member '" ~ memberName ~ "' can only have one name!");
-				name = getUDAs!((__traits(getMember, obj, memberName)), schemaName)[0].name;
+				name = getUDAs!(member, schemaName)[0].name;
 			}
 
-			IndexFlags flags = IndexFlags.None;
 			ulong expires = 0LU;
 			bool force;
 
-			static if (hasUDA!((__traits(getMember, obj, memberName)), mongoForceIndex))
+			static if (hasUDA!(member, mongoForceIndex))
 			{
 				force = true;
 			}
-			static if (hasUDA!((__traits(getMember, obj, memberName)), mongoBackground))
+			static if (hasUDA!(member, mongoExpire))
 			{
-				flags |= IndexFlags.Background;
-			}
-			static if (hasUDA!((__traits(getMember, obj, memberName)), mongoDropDuplicates))
-			{
-				flags |= IndexFlags.DropDuplicates;
-			}
-			static if (hasUDA!((__traits(getMember, obj, memberName)), mongoSparse))
-			{
-				flags |= IndexFlags.Sparse;
-			}
-			static if (hasUDA!((__traits(getMember, obj, memberName)), mongoUnique))
-			{
-				flags |= IndexFlags.Unique;
-			}
-			static if (hasUDA!((__traits(getMember, obj, memberName)), mongoExpire))
-			{
-				static assert(getUDAs!((__traits(getMember, obj, memberName)), mongoExpire)
+				static assert(getUDAs!(member, mongoExpire)
 						.length == 1, "Member '" ~ memberName ~ "' can only have one expiry value!");
-				flags |= IndexFlags.ExpireAfterSeconds;
-				expires = getUDAs!((__traits(getMember, obj, memberName)), mongoExpire)[0].seconds;
+				expires = getUDAs!(member, mongoExpire)[0].seconds;
 			}
 
-			if (flags != IndexFlags.None || force)
-				collection.ensureIndex([tuple(name, 1)], flags, dur!"seconds"(expires));
+
+			static if (is(IndexOptions))
+			{
+				IndexOptions indexOptions;
+				static if (hasUDA!(member, mongoBackground))
+				{
+					indexOptions.background = true;
+				}
+				static if (hasUDA!(member, mongoDropDuplicates))
+				{
+					indexOptions.dropDups = true;
+				}
+				static if (hasUDA!(member, mongoSparse))
+				{
+					indexOptions.sparse = true;
+				}
+				static if (hasUDA!(member, mongoUnique))
+				{
+					indexOptions.unique = true;
+				}
+				static if (hasUDA!(member, mongoExpire))
+				{
+					indexOptions.expireAfterSeconds = cast(int)expires;
+				}
+			}
+			else
+			{
+				IndexFlags flags = IndexFlags.None;
+				static if (hasUDA!(member, mongoBackground))
+				{
+					flags |= IndexFlags.Background;
+				}
+				static if (hasUDA!(member, mongoDropDuplicates))
+				{
+					flags |= IndexFlags.DropDuplicates;
+				}
+				static if (hasUDA!(member, mongoSparse))
+				{
+					flags |= IndexFlags.Sparse;
+				}
+				static if (hasUDA!(member, mongoUnique))
+				{
+					flags |= IndexFlags.Unique;
+				}
+				static if (hasUDA!(member, mongoExpire))
+				{
+					flags |= IndexFlags.ExpireAfterSeconds;
+				}
+
+				if (flags != IndexFlags.None || force)
+					collection.ensureIndex([tuple(name, 1)], flags, dur!"seconds"(expires));
+			}
 		}
 	}
 }
@@ -800,7 +836,10 @@ unittest
 
 unittest
 {
-	import std.digest.digest;
+	static if (__VERSION__ >= 2076)
+		import std.digest;
+	else
+		import std.digest.digest;
 	import std.digest.sha;
 	import std.datetime.systime;
 
@@ -988,7 +1027,7 @@ unittest
 	{
 		mixin MongoSchema;
 
-		@mongoUnique string username;
+		@mongoExpire(30) @mongoUnique string username;
 		@binaryType()
 		ubyte[] hash;
 		@schemaName("profile-picture")
@@ -1002,21 +1041,21 @@ unittest
 
 	User user;
 	user.username = "Example";
-	user.hash = sha512Of("password123");
+	user.hash = sha512Of("password123").dup;
 	user.profilePicture = "example-avatar.png";
 
 	assertNotThrown(user.save());
 
 	User user2;
 	user2.username = "Bob";
-	user2.hash = sha512Of("foobar");
+	user2.hash = sha512Of("foobar").dup;
 	user2.profilePicture = "bob-avatar.png";
 
 	assertNotThrown(user2.save());
 
 	User faker;
 	faker.username = "Example";
-	faker.hash = sha512Of("PASSWORD");
+	faker.hash = sha512Of("PASSWORD").dup;
 	faker.profilePicture = "example-avatar.png";
 
 	assertThrown(faker.save());
@@ -1046,7 +1085,7 @@ unittest
 
 	User user3;
 	user3.username = "User123";
-	user3.hash = sha512Of("486951");
+	user3.hash = sha512Of("486951").dup;
 	user3.profilePicture = "new.png";
 	User.upsert(["username": "User123"], user3.toSchemaBson);
 	user3 = User.findOne(["username": "User123"]);

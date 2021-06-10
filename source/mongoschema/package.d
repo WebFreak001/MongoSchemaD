@@ -52,6 +52,11 @@ enum mongoUnique;
 struct mongoExpire
 {
 	///
+	this(int seconds)
+	{
+		this.seconds = cast(ulong) seconds;
+	}
+	///
 	this(long seconds)
 	{
 		this.seconds = cast(ulong) seconds;
