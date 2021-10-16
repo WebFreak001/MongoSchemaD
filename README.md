@@ -40,12 +40,19 @@ struct User
 	int sessionID;
 }
 
+// implement these for this example
+// if you use static arrays in the functions (like using the std.digest methods)
+// you need to call .idup on your arrays to copy them to GC memory, otherwise
+// they would corrupt when leaving the stack frame. (returning the function)
+ubyte[] generateSalt();
+ubyte[] complicatedHashFunction();
+
 User registerNewUser(string name, string password)
 {
 	User user;
 	user.username = name;
-	user.salt = generateSalt().dup; // needs dup because array gets messed up otherwise when leaving function
-	user.hash = complicatedHashFunction(password, user.salt).dup;
+	user.salt = generateSalt();
+	user.hash = complicatedHashFunction(password, user.salt);
 	user.permissions ~= Permission("forum.access", 1);
 	// Automatically serializes and puts the object in the registered database
 	// If save was already called or the object got retrieved from the
@@ -68,7 +75,9 @@ User registerNewUser(string name, string password)
 // convenience method, could also put this in the User struct
 User find(string name)
 {
-	return User.findOneOrThrow(["username": name]);
+	// throws if not found, can also use `tryFindOne` to get a Nullable instead
+	// of throwing an exception.
+	return User.findOne(["username": name]);
 }
 
 void main()
