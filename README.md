@@ -13,8 +13,6 @@ import vibe.db.mongo.mongo;
 import mongoschema;
 import mongoschema.aliases : name, ignore, unique, binary;
 
-auto client = connectMongoDB("localhost");
-
 struct Permission
 {
 	string name;
@@ -42,10 +40,7 @@ struct User
 	int sessionID;
 }
 
-// Links the `test.users` collection to the `User` struct.
-client.getCollection("test.users").register!User;
-
-User register(string name, string password)
+User registerNewUser(string name, string password)
 {
 	User user;
 	user.username = name;
@@ -70,8 +65,21 @@ User register(string name, string password)
 	return user;
 }
 
+// convenience method, could also put this in the User struct
 User find(string name)
 {
 	return User.findOneOrThrow(["username": name]);
+}
+
+void main()
+{
+	// connect as usual
+	auto client = connectMongoDB("localhost");
+
+	// before accessing any MongoSchemaD functions on a struct, register the
+	// structs using the `MongoCollection.register!T` function globally.
+
+	// Links the `test.users` collection to the `User` struct.
+	client.getCollection("test.users").register!User;
 }
 ```
