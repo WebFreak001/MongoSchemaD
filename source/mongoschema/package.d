@@ -193,7 +193,7 @@ T bsonToMember(T)(auto ref T member, Bson value)
 	{ // Arrays of anything except strings
 		alias Type = typeof(member[0]);
 		if (value.type != Bson.Type.array)
-			throw new Exception("Cannot convert from BSON type " ~ value.type.to!string ~ " to array");
+			throw new Exception("Cannot convert from BSON type " ~ value.type.toString ~ " to array");
 		auto arr = value.get!(Bson[]);
 		auto ret = appender!T();
 		ret.reserve(arr.length);
@@ -206,7 +206,7 @@ T bsonToMember(T)(auto ref T member, Bson value)
 		alias Type = typeof(member[0]);
 		T values;
 		if (value.type != Bson.Type.array)
-			throw new Exception("Cannot convert from BSON type " ~ value.type.to!string ~ " to array");
+			throw new Exception("Cannot convert from BSON type " ~ value.type.toString ~ " to array");
 		auto arr = value.get!(Bson[]);
 		if (arr.length != values.length)
 			throw new Exception("Cannot convert from BSON array of length "
@@ -238,7 +238,7 @@ T bsonToMember(T)(auto ref T member, Bson value)
 			return cast(T) value.get!double;
 		else
 			throw new Exception(
-					"Cannot convert BSON from type " ~ value.type.to!string ~ " to " ~ T.stringof);
+					"Cannot convert BSON from type " ~ value.type.toString ~ " to " ~ T.stringof);
 	}
 	else static if (__traits(compiles, { value.get!T(); }))
 	{
@@ -253,6 +253,35 @@ T bsonToMember(T)(auto ref T member, Bson value)
 	{
 		pragma(msg, "Warning falling back to deserializeBson for type " ~ T.stringof);
 		return deserializeBson!T(value);
+	}
+}
+
+// our own function instead of std.conv because it prints way too many deprecations
+private string toString(Bson.Type type)
+{
+	final switch (type)
+	{
+		case Bson.Type.end: return "end";
+		case Bson.Type.double_: return "double";
+		case Bson.Type.string: return "string";
+		case Bson.Type.object: return "object";
+		case Bson.Type.array: return "array";
+		case Bson.Type.binData: return "binData";
+		case Bson.Type.undefined: return "undefined";
+		case Bson.Type.objectID: return "objectID";
+		case Bson.Type.bool_: return "bool";
+		case Bson.Type.date: return "date";
+		case Bson.Type.null_: return "null";
+		case Bson.Type.regex: return "regex";
+		case Bson.Type.dbRef: return "dbRef";
+		case Bson.Type.code: return "code";
+		case Bson.Type.symbol: return "symbol";
+		case Bson.Type.codeWScope: return "codeWScope";
+		case Bson.Type.int_: return "int";
+		case Bson.Type.timestamp: return "timestamp";
+		case Bson.Type.long_: return "long";
+		case Bson.Type.minKey: return "minKey";
+		case Bson.Type.maxKey: return "maxKey";
 	}
 }
 

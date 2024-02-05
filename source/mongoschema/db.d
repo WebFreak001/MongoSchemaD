@@ -400,6 +400,8 @@ private:
 /// Mixin for functions for interacting with Mongo collections.
 mixin template MongoSchema()
 {
+	import vibe.db.mongo.collection;
+
 	import std.typecons : Nullable;
 	import std.range : isInputRange, ElementType;
 
@@ -428,14 +430,16 @@ mixin template MongoSchema()
 	{
 		if (_schema_object_id_.valid)
 		{
-			collection.update(Bson(["_id": Bson(_schema_object_id_)]),
-					this.toSchemaBson(), UpdateFlags.upsert);
+			UpdateOptions options;
+			options.upsert = true;
+			collection.replaceOne(Bson(["_id": Bson(_schema_object_id_)]),
+					this.toSchemaBson(), options);
 		}
 		else
 		{
 			_schema_object_id_ = BsonObjectID.generate;
 			auto bson = this.toSchemaBson();
-			collection.insert(bson);
+			collection.insertOne(bson);
 		}
 	}
 
@@ -444,14 +448,16 @@ mixin template MongoSchema()
 	{
 		if (_schema_object_id_.valid)
 		{
-			collection.update(Bson(["_id": Bson(_schema_object_id_)]),
-					Bson(["$set": this.toSchemaBson()]), UpdateFlags.upsert);
+			UpdateOptions options;
+			options.upsert = true;
+			collection.updateOne(Bson(["_id": Bson(_schema_object_id_)]),
+					Bson(["$set": this.toSchemaBson()]), options);
 		}
 		else
 		{
 			_schema_object_id_ = BsonObjectID.generate;
 			auto bson = this.toSchemaBson();
-			collection.insert(bson);
+			collection.insertOne(bson);
 		}
 	}
 
@@ -460,7 +466,7 @@ mixin template MongoSchema()
 	{
 		if (!_schema_object_id_.valid)
 			return false;
-		collection.remove(Bson(["_id": Bson(_schema_object_id_)]), DeleteFlags.SingleRemove);
+		collection.deleteOne(Bson(["_id": Bson(_schema_object_id_)]));
 		return true;
 	}
 
@@ -568,18 +574,16 @@ mixin template MongoSchema()
 	}
 
 	/// Finds one or more elements using a query.
-	static typeof(this)[] find(Query!(typeof(this)) query,
-			QueryFlags flags = QueryFlags.None, int num_skip = 0, int num_docs_per_chunk = 0)
+	static typeof(this)[] find(Query!(typeof(this)) query, FindOptions options = FindOptions.init)
 	{
-		return find(query._query, flags, num_skip, num_docs_per_chunk);
+		return find(query._query, options);
 	}
 
 	/// ditto
-	static typeof(this)[] find(T)(T query, QueryFlags flags = QueryFlags.None,
-			int num_skip = 0, int num_docs_per_chunk = 0)
+	static typeof(this)[] find(T)(T query, FindOptions options = FindOptions.init)
 	{
 		typeof(this)[] values;
-		foreach (entry; collection.find(query, null, flags, num_skip, num_docs_per_chunk))
+		foreach (entry; collection.find(query, options))
 		{
 			values ~= fromSchemaBson!(typeof(this))(entry);
 		}
@@ -587,18 +591,15 @@ mixin template MongoSchema()
 	}
 
 	/// Finds one or more elements using a query as range.
-	static DocumentRange!(typeof(this)) findRange(Query!(typeof(this)) query,
-			QueryFlags flags = QueryFlags.None, int num_skip = 0, int num_docs_per_chunk = 0)
+	static DocumentRange!(typeof(this)) findRange(Query!(typeof(this)) query, FindOptions options = FindOptions.init)
 	{
-		return findRange(query._query, flags, num_skip, num_docs_per_chunk);
+		return findRange(query._query, options);
 	}
 
 	/// ditto
-	static DocumentRange!(typeof(this)) findRange(T)(T query,
-			QueryFlags flags = QueryFlags.None, int num_skip = 0, int num_docs_per_chunk = 0)
+	static DocumentRange!(typeof(this)) findRange(T)(T query, FindOptions options = FindOptions.init)
 	{
-		return DocumentRange!(typeof(this))(collection.find(serializeToBson(query),
-				null, flags, num_skip, num_docs_per_chunk));
+		return DocumentRange!(typeof(this))(collection.find(serializeToBson(query), options));
 	}
 
 	/// Queries all elements from the collection as range.
@@ -616,54 +617,66 @@ mixin template MongoSchema()
 
 		if (documents.empty)
 			return;
-		collection.insert(documents.map!((a) {
+		collection.insertMany(documents.map!((a) {
 				a.bsonID = BsonObjectID.init;
 				return a.toSchemaBson;
 			}).array, options); // .array needed because of vibe-d issue #2185
 	}
 
-	/// Updates a document.
-	static void update(U)(Query!(typeof(this)) query, U update, UpdateFlags options = UpdateFlags
-			.none)
+	/// Updates a document with `$dollarOperations`.
+	static void updateOne(U)(Query!(typeof(this)) query, U update, UpdateOptions options = UpdateOptions.init)
 	{
-		update(query._query, update, options);
+		updateOne(query._query, update, options);
 	}
 
 	/// ditto
-	static void update(T, U)(T query, U update, UpdateFlags options = UpdateFlags.none)
+	static void updateOne(T, U)(T query, U update, UpdateOptions options = UpdateOptions.init)
 	{
-		collection.update(query, update, options);
+		collection.updateOne(query, update, options);
 	}
 
-	/// Updates a document or inserts it when not existent. Shorthand for `update(..., UpdateFlags.upsert)`
-	static void upsert(U)(Query!(typeof(this)) query, U upsert,
-			UpdateFlags options = UpdateFlags.upsert)
+	/// Updates any amount of documents.
+	static void updateMany(U)(Query!(typeof(this)) query, U update, UpdateOptions options = UpdateOptions.init)
 	{
+		updateMany(query._query, update, options);
+	}
+
+	/// ditto
+	static void updateMany(T, U)(T query, U update, UpdateOptions options = UpdateOptions.init)
+	{
+		collection.updateMany(query, update, options);
+	}
+
+	/// Updates a document or inserts it when not existent. Calls `replaceOne` with `options.upsert` set to true.
+	static void upsert(U)(Query!(typeof(this)) query, U upsert, UpdateOptions options = UpdateOptions.init)
+	{
+		options.upsert = true;
 		upsert(query._query, upsert, options);
 	}
 
 	/// ditto
-	static void upsert(T, U)(T query, U update, UpdateFlags options = UpdateFlags.upsert)
+	static void upsert(T, U)(T query, U update, UpdateOptions options = UpdateOptions.init)
 	{
-		collection.update(query, update, options);
+		options.upsert = true;
+		collection.replaceOne(query, update, options);
 	}
 
-	/// Deletes one or any amount of documents matching the selector based on the flags.
-	static void remove(Query!(typeof(this)) query, DeleteFlags flags = DeleteFlags.none)
+	/// Deletes one or any amount of documents matching the selector based on the options.
+	static void remove(Query!(typeof(this)) query, DeleteOptions options = DeleteOptions.init)
 	{
-		remove(query._query, flags);
+		remove(query._query, options);
 	}
 
 	/// ditto
-	static void remove(T)(T selector, DeleteFlags flags = DeleteFlags.none)
+	static void remove(T)(T selector, DeleteOptions options = DeleteOptions.init)
 	{
-		collection.remove(selector, flags);
+		collection.deleteMany(selector, options);
 	}
 
 	/// Removes all documents from this collection.
-	static void removeAll()
+	static void removeAll(DeleteOptions options = DeleteOptions.init)
 	{
-		collection.remove();
+		collection.deleteAll(options);
 	}
 
 	/// Drops the entire collection and all indices in the database.
@@ -681,7 +694,7 @@ mixin template MongoSchema()
 	/// ditto
 	static auto count(T)(T query)
 	{
-		return collection.count(query);
+		return collection.countDocuments(query);
 	}
 
 	/// Returns the count of documents in this collection.
@@ -689,7 +702,7 @@ mixin template MongoSchema()
 	{
 		import vibe.data.bson : Bson;
 
-		return collection.count(Bson.emptyObject);
+		return collection.countDocuments(Bson.emptyObject);
 	}
 
 	/// Start of an aggregation call. Returns a pipeline with typesafe functions for modifying the pipeline and running it at the end.
@@ -754,57 +767,30 @@ void register(T)(MongoCollection collection) @safe
 			}
 
 
-			static if (is(IndexOptions))
+			IndexOptions indexOptions;
+			static if (hasUDA!(member, mongoBackground))
 			{
-				IndexOptions indexOptions;
-				static if (hasUDA!(member, mongoBackground))
-				{
-					indexOptions.background = true;
-				}
-				static if (hasUDA!(member, mongoDropDuplicates))
-				{
-					indexOptions.dropDups = true;
-				}
-				static if (hasUDA!(member, mongoSparse))
-				{
-					indexOptions.sparse = true;
-				}
-				static if (hasUDA!(member, mongoUnique))
-				{
-					indexOptions.unique = true;
-				}
-				static if (hasUDA!(member, mongoExpire))
-				{
-					indexOptions.expireAfterSeconds = cast(int)expires;
-				}
+				indexOptions.background = true;
 			}
-			else
+			static if (hasUDA!(member, mongoDropDuplicates))
 			{
-				IndexFlags flags = IndexFlags.None;
-				static if (hasUDA!(member, mongoBackground))
-				{
-					flags |= IndexFlags.Background;
-				}
-				static if (hasUDA!(member, mongoDropDuplicates))
-				{
-					flags |= IndexFlags.DropDuplicates;
-				}
-				static if (hasUDA!(member, mongoSparse))
-				{
-					flags |= IndexFlags.Sparse;
-				}
-				static if (hasUDA!(member, mongoUnique))
-				{
-					flags |= IndexFlags.Unique;
-				}
-				static if (hasUDA!(member, mongoExpire))
-				{
-					flags |= IndexFlags.ExpireAfterSeconds;
-				}
+				indexOptions.dropDups = true;
+			}
+			static if (hasUDA!(member, mongoSparse))
+			{
+				indexOptions.sparse = true;
+			}
+			static if (hasUDA!(member, mongoUnique))
+			{
+				indexOptions.unique = true;
+			}
+			static if (hasUDA!(member, mongoExpire))
+			{
+				indexOptions.expireAfterSeconds = cast(int)expires;
+			}
 
-				if (flags != IndexFlags.None || force)
-					collection.ensureIndex([tuple(name, 1)], flags, dur!"seconds"(expires));
-			}
+			if (indexOptions != indexOptions.init)
+				collection.createIndex([name: 1], indexOptions);
 		}
 	}
 }
@@ -1021,7 +1007,7 @@ unittest
 	auto client = connectMongoDB("127.0.0.1");
 	auto database = client.getDatabase("test");
 	MongoCollection users = database["users"];
-	users.remove(); // Clears collection
+	users.deleteAll(); // Clears collection
 
 	struct User
 	{
@@ -1056,10 +1042,10 @@ unittest
 	User faker;
 	faker.username = "Example";
 	faker.hash = sha512Of("PASSWORD").dup;
-	faker.profilePicture = "example-avatar.png";
+	faker.profilePicture = "faker-avatar.png";
 
-	assertThrown(faker.save());
 	// Unique username
+	assertThrown(faker.save());
 
 	faker.username = "Example_";
 	assertNotThrown(faker.save());
@@ -1129,7 +1115,7 @@ unittest
 	}
 
 	auto coll = client.getCollection("test.users2");
-	coll.remove();
+	coll.deleteAll();
 	coll.register!User;
 
 	User register(string name, string password)
